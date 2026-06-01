@@ -111,6 +111,17 @@ function phoneIntl(t) {
 }
 
 // Message client prédéfini "commande arrivée"
+// Logo CLOANE (noir sur transparent) — embed pour imprimer ticket caisse
+const CLOANE_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAACMCAYAAACK0FuSAAAWrElEQVR42u2deaxdxX3Hv28xDmEpIEpKShSTFqmhahOpaSqlVZSqaaOqi6KqSqpWqVQhAyEtq9lEGhdoU0PDliYOwVAgQMBhCYJCAglglrBDIOwYcFjMYrCNsbGf33v33v4xM73jw71n5rx3z/75SEcPfO97Z/bv/H4z8xsJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgroy1OO8nSvqEpN+UtK+kX5G0U8r3pyW9LWmdpKclPSRpWcl5uF3SrpK6Q+qya/P0cZr6/3OMpP0lLZK0h6SdJfVsWY1L2ippg6Q19vkmRaZ7JU3acnLtrCNpoaQfSzqhRnm5TtJ+kmZtfTv8NvD7JaXtIVuuY0P6c88+nxzxO3uJuq0qHUnvk3StpKV0S1hhB+nekKdjO7r/dGxHH/Y7z5U46E+npMt/2szRkm6S9FZkWQ161km6QdJXWlh+ZwbKZqpm+Xk9or6fKSltvRL6c6+Gz+UjyvvBklZJetOO9dOSXh7h34ccLQy/QXQlzSQEuxsQbve5E/2ZxPdnJf1vwfna6KWnM+CZsT/byKWS3hkwYZtJ1P2gZ9b7TrJNrJd0QYvK8XWvPJLlNGXL5NQa5ef5RN9IPm6SfG5JFuhsSpt06S7qnVV7ttufF40g3+ttPd8p6RRJh9gJ+znWSOtJuhXprBYPJATXdeJRzhY7A8T9qoLyt8mbbAxLW9ss9EsTdTw9RJizPG4C6HtEtlmPT5P5is3rzJByceX6Uo3ytCbRNwY9rj+XYaF3U9pgL4cJem+efaPIx7XDi+eR36/bv3F1xHffsGMslMzlQwb0PBtu13tXT9IWSV9F0AvjGOux8AW4O+J673pWnPubb1jXXRN53OZzNjDRqVMbixH0siYqCHq+gn6k/f3jM/zOnTJ7aqAkXvEafqfEhuc6yT0Ieu5cnxiMix5gepJ+0MBy7Q3wPg0Sv571hjVF0P26vQxBb4yg9yR9I/FvSySdJLNJesmQ33tJZh8OFMgS7bhRp8yG56yaac9az8OKQ9D7611TBYu5X8aunh9rULn+2PNwdSPKoC7tLEbQnSemaO8Dgp6foK+0xt6g/Cef24Z8DwriTM9amJ2HZd5NPM7K7w7oWDEDfTdhxY16o03bBX1TQnTKGJjce52ov9aQss2yTOUmUlfXIF+xFrrf/9ch6LUX9CmZZbkkW2WWlhxX2nckj2I+I+kSpDZ/vuEN6lmF3FnSMwHXoputT0e4INPe05P0EwR9JGxR+oat0GTLr3f/mdXcN9G5tLxV87I9T9mWL5z4bWuQoPt7cHoyZ5/bLOgzFXi22Z//M8d8DqIjcwrKZ0bv3Un/HesNhBw5ao7u1k7K97fKBJDZJLPJaluKVZJ1ArF9xK7Ztgr6ujlM4rpzEP/OHNqVq+MXa1y+b8/B4+HyfWbDBN2v00Ox0CvxzMUTNJ3iifL3f5xi35EMGvYvMufVK03dI8U5y2Dcy8uwCEtj3iA1af/9XVuZqySdHPG+kyV9WiaS1C5eg3DvH4voPFMy0cm+KemIEQj67hoe5ambKJsm8Iikj9lynwi04543C5/0/v05SU/JnEn219X2lPQbkj4s6UCZ6IHyJnCTGd93v6Q/qFn5flXmXPmMpAUZ++KY9U7sU3FBX+T1jVjBG5O0WSa6YJ6C3osYwyYKfmdP0hkyy0njKudInz+ezWXSOKw9v2PHYzeJ3cdOxhclvneCTJCqfQS58JrSj9SkWWdPWOt+Phwns66SdM3FWDHXY6HPiXMT5RjrLu1J+qXMGdSsXOuVYxaPgHt33ULHPp+hXw1bSz+iwvnLaqEn+9ItLbLQ83pnGfRSxtANtl63WiNvEFdaYwJy4GrF78D1B5qXNfrwnf8saa123AiXloafjfDdbRN0J+Yxg7GbwG3WaOI+36DBx9Vidr/XrYznsi/Bb2+PN1DQ/UnacQh67Vgnsw4+KP9PJf7/5gHfWy/pbKQ3v4Yf2rjkh0ws4jzpCr33HHo3MUA+MeJ3tknQn4msd3/H+d05pGNjBo/MbE71nhd3zcM6r0ubm4+gu/FkKsdxDUHPh6UaHDZ3ucw5dMfBkr6V+M5R4thabrjoVR3Fb2g6usD0vZUQ9RnPOzBq2iLoJ2awHF0Mgu/lmJ6nFB/vYDZnq26UhC4iitlA5fJb1UAc8xF0//fyCKSDoOfLazL7peZSRucjvfnNYqcVt2Ze1uaNB7XjWm9eoQPbIuhvKC7ynxP8ImKsP664o10u3VU/n36FRhNpzw+P20RB99vZvyPotdSPGzN8f4Okh5HdfPiFwrGlfZfr4SWm1QUo2JLjO9og6McqvBHOr/ObC0zby157DF320bN5qSrvavhRNT+P69Q/yjms3W0vcGJVhqD78SsQ9PqxTcaTmraf6myb97uQ3XxnV6HALtMVGkzOy/nvt0HQn1V4XdeJzcslpM8PRhO67OPJipbxf0ZMmvwwqLcE6sTld2NDBT2v/REIenFc5bXr+yVdJ+lH6i+nbVP+l2u1mpUJSyxtIFndkjJpg6DHbIQr88av/1D4xIUvflVkbYRA99S/fezLSnfPd73JQdUGxSyhX2OPoZ6DoNeWJTLe1Ltk7j+/WFAI6yM6WpUHTQQ9O99XOMKbq/ObS0ynO7sdc8f2hRUr44MVXjsftGa8LqLtdSW9UENB7ypuP8GoJ2oIOrSGUAdzn92BoDdG0F+NmMR1KjDgHBbRPl0eXqlYGT8SmIy4dfXkXpDlGfpk3QTdbWLMcgnT8wg6QBwXByy1rtpz93ebBD008DrBuKUCaX0xcvLRq1kZuz63csDvJuMtFBFMKW9Bd/9+rE13lrvTL0DQAcI8GehYrkM9jaA3RtCXKf2Ioj/Bq1J6ZyIG/lMrkuYbFF4LT7Oyb4nIs7Ng6yLoyfy6I3ghUR+FNwJBh1YwldLw/I1ypyDojRH0nwbExuVtfYXSHArMkscVuvNhOjK9DwcEIU3QXd+8omaC7uLRn6642Beu7l9F0AHCjS7NiqiaFYCgz59XI70y11UozasDaXb19FIF0vqtCA+I++ywlL/zYkSeuzIXX9RJ0P0YFg8qbpOca5NXz2OcQ9BhzozXII0neg1vWIMcV/UjcUE29lH/2spBuAnc7RVK8/2epZ42gO5bgbR+0es7w9I5KXMH9PKUv3Npoj6SuCs/d5Y5714X/Dr8hMy5ZAUmyBNW1P+G7gsI+mAWBTqSG0geoTobxUTA6+LuJj+jQmm+2xOxYeKWvJu9DI6TtLe1OMdT+tWYpGsCf+ska31PBMaZnqR/rFH7S9bhKRFtcsyr4410YSiayRqk8QOBQdLxDNXZGA4NfO4sy80VS/e3ZVzZY4G0S8aNvbykdB4UsM7dhGo2oi4kEwPg89Y6XTBE6GYlfdD+vXNr2CaXSfoLSX9k8zKZUm4dSXvIXFDzuRr3wzHv5z0yRxfHNdpz986D82cMe+3gPqWvX7l1q0NaWDZNXUM/XembrVy+qjiJ2x6oE5enZSWmMfb8+E8y/s20sMwu2t8jJddP7Br6sDjf7ygcu9+v5y9nLMMqraEX+cAIqIPLfbfI732X6mwMe0UMQpK5ha1qvBOZ9j1LSt+qDJbZn2b4u49bq7WbMtZ0JX2s5m3zBIVd7y6/HTs5bQJu8/EoHzcxmha0RtDHEj+HfQ7NYWFk3W6pYNqnEsI9rL3uXFL6nMt4WN/v2M/WZPy7F0Xk2312Y43b5nKZ8/uTSo+D4FzTu6oZN3aN24lMXg+0RNB3jxwgoTnsHmnlvlnjPJbhZrzQDp49hU8PZL2k4gyZjWATKXmbtJ99tubt8y9lrt90VrhS8tuR9Ifqn9YBaLWgzwaEm/WX5hFbp1soqkz8rRXsyZRyn5S5G/3kOfz9H6q/y1spE4YFMpsH68yvKt71PitpKc0PEPR+QAos9PawKfC5q/Nfr/Fkpeh2u1TG/Zt2tr9jP7thju84yP79mCNsf9+AdnqlpJ2UHvbVHWVbKOnndG1ou6B3AgNgl2psHLGbZHarYNp3iRTs7QWn6yD7cyJiPPjiPN5zX8BKd0fY9pS5AKXOfEHmLnlnqQ8TdRdw5uOSTqN7Q5sF/Z2AcLtOtITqbAzrE3U7zELfq4Jp3z1jHoviQ1ZI0ybG40qP2x7DpzKMO4sb0Fb3044b/tLyPCPp6Jrm0+1Kz+uBlgh6KKSrG6A+QnU2huc9keml1Pm+FUz7hOLOChcZqvi+gNfAP998wYj6bFo5uHXlAxrSXs+X2XswG2gX4/Z7z9YwjxM27aN8FtifCxnyRkMdIsWFzhq7QepAqrMxrJB0XsqE00WX2rti6T7Bm4hMDBFO117PKTBdn7TiOpFinU/K7NweRfS6lZKOVPp6upuorZL0mZq318WS/tgaFd2Udjshs5x0gEzcjLoEw+raScubyidSHBubW8RRiosa9lYLy6bJt625qz2H5W26gnm7MtBWXV6KdDFeo/D1ny69o9x5vl3pUc/8wCJFMt9IcWm4PKVFXuuoH01wkMBx2xo0ntD1qbMtneU1WdDXKu761O/VKM3u34t0t08FJkbdnNpJ6D57vw4vLrA88hT0s+zvbo8Q9a6kVxB0aCPvpjQ8/97mtoV/bbKghwTB5W1NhdKcJhR+XlYVlJ4zAh4DP03X5PD+UMxzN9Eo8pKdPAVdkh6LKHP/PSsRdBgVkzVJ57MyRz4GRbgaU3/N6q/Vzktamsjdkv5Ew9dh3dGoRRVJr5tMpq2husnVvQWl6R/sO9OOqrn+tN2KWFo89hj8+8+3yhwtHBaZbswK364y15N+rQHt9ndsWfprzYPy7m6z+4J2PCaYFsUPoBH8dwZL42As9EZY6Fks3u9XIK3rFL65qsj6ODzSUiz7ce7nojwteVvokvRv6u9bSFtTd5/90ptUYaFDKwgN7m5geBxBb4ygr40YcLrqRxMsi+MVXi92eSjqhrgntOP+khhhHfXZ4pj3djV8k1hdBd15mEJXyvr184LM0iKCDnNmvEZpfVX9KxiH5aUr6bdV3+ANsCM3BQYU3717WYnpPErpIVXlCcitBaXpQKUfVRvUf8q6Qcu5px9oUNv9lOLCVrsoc/tLej9dHtrCdxQ+fuOsjPUtKZOmW+gxnpmutYI6FW6XLo1F1UXMDvMqut6LKJ+iLHQ30Ytd9uhGfo6FDo2ho75rfVgDdAPr7Qh6IwR9tcKuY+fWfKGE9Lk211H4eNbqgtLkyiMkElV6XP3+sEGC7k+uOvMsHwQdolxddeI2pd9BPKZ+CMZPSzq3AmK0kWY2L85T37U+DBdmdH9J1xeYtte8fjQWGDQlcx953qxQf6d6aAlgRvnG5/YfX9CGjUU9SX/esPb7WfVvD+QiKYABg2OMK9FZ6stKSucWLy0PYqHPi3WedybGyisi2MyTinOnunQXFclwY4Wt81AUNddnz26Qhe6PW9NY6JAnkzVM80/trDe04cfFTT5e0gck/VNB6btU5vyvvAHs9yRdIenvaHJz4ixJX48YWNw1lV+ybTuvO7efkPRR2752CnzXxUk/q4ByOknSHrbdTaakZ0zSozLBZOZ77jyEixfwIZmY504sxoZY6V1bb0c2rA1fK+nzgboBaCW+qzA0q3UW1D0FpOslz2rreJaSS8OoA2e0xUKXpGfm4J15OId0vBmZDlfvXRW3dv6cdgzlWrUwyY8pbj9ET+YcfZMsdMkcWewqfR8QFjq0jmWKi5nc877Xk7RN0n/lkJ47BwxIRQykbRJ0JSZLoTqf8cT99BG8+4oBg37I1b694PIPpc15jB4rqf4OVXiZwtXtEw0UdHltMusmOQQdGs3PlS0Sli8EG2SuA5wPx0l6aMjfT7OONiHoc+bbGevcHzhf19xuE7tE/bsEZpUeKGTQhGJFQWXzM4XXafMWqxjWBrwIebfbsgX9Es0tgh+CDo1nkyeU3chOkexIz0n6gcxaexpHyGy2ejRhBWWJijU7YutjU2SHdHdvLy6gTvKOpf9AYkAMuS8HuXjXSPqRTEjhY2TCBR9s//tbkm5WP0pdFqu8m7DMi4xaGHLluuWftSX32VMjPQk9Ww9NE3TJhHoNTWqqJOhdSUsLHENCXh5oMLOe5ZSlc8wEBpXtEeKc1W3WkYke1ZN0cgGCHhOwIo8n7/CmryocVjNtTTtLfc1mfIe7x31dgX1gZYTV5z5bVoE+u1nhnfjuWF0TBV1DjIuqCXpVnyuRvcGMNyAPkzK7m0NnlX3cefVxb+CY8UTa3fDV9Sy8mYSIT2Qsv479/s6SzvRmvHnTS6Q/z8ddRvF2znn6oMzmNBdzIEudj3nWUbJcku1gzGtbsZPLSTsZ3KfAPvBXSr9VzX22VdIJFeiz16i/+z1UluermSzP2H7LZibRP8p4puzPzYJGs9gT2mnNbRdpXpatf/nEhhHne5OqNcN2dfB8QfX+ulfnZZ297ibqeEvBbf80pa+d+5bgJRUTiLR+6j7bNOL3VsVCl6SnFH+BTtkWehXGGNeOL0bymmuhS2bj0YRMUI0FI3LVjeJOYmfl7SQTinYvmtxI+TU7KC5QeRsA3UCzk8yxxV0Lfv+XbBrGA/28Z79bFW5VetRH99nukv61oe33ownBqjLc0Y6gF85eku6XtFBhl16eA7zvtt8i6VhJn6G55cKBMmtqbgmlqHPWzpobt2J+k6QPF5z3QyTta9vasL7sPrujYvX2uYgxyE1EDmpw+z3Ntl12kgMM4WT1N5/NyrhDR+GGz7rR7qqc89l2l7vPYpnNeMnNaXnU87T6Lu7NMkcYy+BRhV22VT66+LDCF5eMeoJWJZd7shxCd6e3fVMcLveWc3lisHOCO8r18Y7eu1t1VUH5Q9Dfy3e9yZx/rLA7z3oedJLi8pLbd0gM3WdPV7R/LlZ8MJx7Gyzosm02LZYFgo6gg+VCmfX1Qcdikrvb/c1V/v93tONu6OQg9G4BFnmSjV66OhV43IC0ugJ1vkLmQpRQnfvPrAbvePf/xlaZY2Jlc51N83RKfTgvwtEV7psvJ9rOoDpxpydGwQuB97nyPKzgcjhR/eOyw8ohj6N8VRo/Qo8rm4uQNJDtpDfJ7DaP2bkcmjFukVmbLMvlOlXRmfRLFarzQyTdqH4M9rk8b8tc3bukQvmKTXvVr+89OUNerhvB+16LfNfhJZTFHZFpK6MdVem5DCkbTNt3Li6V9LuSFknaW9KeMhtUFspsyHEWzpQd1DfIRHl6TMWdI0/jYUm7afjtVUXjNmC9KHMjXhU5WtJHZDaw7SUTF2AXW37vysT73yzjml0js2mpapwos1FsWmaH/zDLa0JmWeBrFe+Hj0h6v4bv1nftapvtr/PhNkn7afhGQlduB5RUFr+Q9L4B43PPK4vfGuH7Vldo/IjxJkzI3Fx3LPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQJP4P104xLbUdGbIAAAAASUVORK5CYII=";
+
+// Mise en forme automatique des saisies clavier
+function upperCaseFr(s) { return (s || '').toString().toUpperCase(); }
+function nameCase(s) {
+  if (!s) return '';
+  // Première lettre de chaque mot/partie (gère espaces, tirets, apostrophes)
+  return s.toLowerCase().replace(/(^|[\s\-'\u2019])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
+}
+
 function buildClientMessage(row, magasin = "CLOANE SQUARE") {
   const prenom = (row.prenom || "").trim() || "";
   const marque = (row.marque || "").trim();
@@ -137,7 +148,7 @@ const EMPTY_FORM = {
   date:"", nom:"", prenom:"", tel:"", email:"", marque:"", modele:"",
   refInt:"", refFourn:"", couleur:"", taille:"",
   etat:"", dateValid:"", vendeur:"", commentaire:"",
-  articleCote:"", deCoteJusquau:"", dateRecup:""
+  articleCote:"", deCoteJusquau:""
 };
 
 // ── Helper components ──────────────────────────────────────────────────────
@@ -204,13 +215,13 @@ export default function CommandesB2B({onBack}) {
   const [loadError, setLoadError] = useState(false);
   const [brands, setBrands] = useState([...DEFAULT_BRANDS]);
   const [vendors, setVendors] = useState([...DEFAULT_VENDORS]);
-  // URL B2B par marque/fournisseur (modifiable dans les paramètres)
+  // Infos B2B par fournisseur : URL site B2B, téléphone et e-mail du contact
   const [brandUrls, setBrandUrls] = useState({
-    "CARHARTT": "https://b2b.carhartt-wip.com",
-    "TOMMY HILFIGER": "https://b2b.tommy.com",
-    "LACOSTE": "https://b2b.lacoste.com",
-    "AIGLE": "https://pro.aigle.com",
-    "REPLAY": "https://b2b.replay.it",
+    "CARHARTT":       { url: "https://b2b.carhartt-wip.com", tel: "", email: "" },
+    "TOMMY HILFIGER": { url: "https://b2b.tommy.com",        tel: "", email: "" },
+    "LACOSTE":        { url: "https://b2b.lacoste.com",      tel: "", email: "" },
+    "AIGLE":          { url: "https://pro.aigle.com",        tel: "", email: "" },
+    "REPLAY":         { url: "https://b2b.replay.it",        tel: "", email: "" },
   });
   const [filters, setFilters] = useState({etat:"",marque:"",vendeur:""});
   const [search, setSearch] = useState("");
@@ -231,6 +242,7 @@ export default function CommandesB2B({onBack}) {
   const [newBrandInput, setNewBrandInput] = useState("");
   const [newVendorInput, setNewVendorInput] = useState("");
   const [contactMenu, setContactMenu] = useState(null); // {row, x, y} popover contact client
+  const [statusMenu, setStatusMenu] = useState(null);   // {row, x, y} popover changement de statut
 
   // ── CHARGEMENT depuis Supabase + purge auto au montage ─────────────────────
   // Règle : on garde les 60 derniers jours sauf statut "commandé",
@@ -357,8 +369,12 @@ export default function CommandesB2B({onBack}) {
   }
 
   async function saveForm() {
-    if (!form.nom && !form.modele && !form.marque) {
-      alert("Veuillez renseigner au moins le nom du client, la marque ou le modèle.");
+    if (!form.nom?.trim()) {
+      alert("Le nom du client est obligatoire.");
+      return;
+    }
+    if (!form.tel?.trim()) {
+      alert("Le numéro de téléphone est obligatoire.");
       return;
     }
     const today = fmtDate(new Date());
@@ -445,7 +461,6 @@ export default function CommandesB2B({onBack}) {
     updateRow(ticketRow.id, {
       articleCote: ticketRow.articleCote,
       deCoteJusquau: ticketRow.deCoteJusquau,
-      dateRecup: ticketRow.dateRecup || "",
       vendeur: ticketRow.vendeur,
     });
   }
@@ -462,12 +477,9 @@ export default function CommandesB2B({onBack}) {
     setBrands(b => b.filter(x => x !== name));
     setBrandUrls(u => { const n = {...u}; delete n[name]; return n; });
   }
-  function setBrandUrl(name, url) {
-    setBrandUrls(u => ({...u, [name]: url}));
-  }
   // Ouvre le site B2B de la marque (bouton "Commander")
   function openOrderUrl(marque) {
-    const url = (brandUrls[marque] || "").trim();
+    const url = (brandUrls[marque]?.url || "").trim();
     if (!url) {
       alert(`Aucune URL B2B enregistrée pour « ${marque} ».\nAjoutez-la dans ⚙ Paramètres → Fournisseurs.`);
       setShowSettings(true); setSettingsTab("brands");
@@ -475,6 +487,13 @@ export default function CommandesB2B({onBack}) {
     }
     const full = /^https?:\/\//i.test(url) ? url : "https://" + url;
     window.open(full, "_blank", "noopener");
+  }
+  // Met à jour une info fournisseur (url, tel ou email)
+  function setBrandField(name, field, value) {
+    setBrandUrls(u => ({
+      ...u,
+      [name]: { url:"", tel:"", email:"", ...(u[name]||{}), [field]: value }
+    }));
   }
   // Contact client : WhatsApp / Mail avec message prérempli
   function sendWhatsApp(row) {
@@ -527,7 +546,6 @@ export default function CommandesB2B({onBack}) {
       "VENDEUR": r.vendeur,
       "Article de côté": r.articleCote,
       "De côté jusqu'au": fmtDateFr(r.deCoteJusquau),
-      "Jour récupération": fmtDateFr(r.dateRecup),
       "Commentaire": r.commentaire,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -579,9 +597,10 @@ export default function CommandesB2B({onBack}) {
         .ticket-paper {
           font-family:'Courier New','Courier',monospace;
           background:#FFFCF5; color:#1C1510;
-          padding:24px 20px; line-height:1.55;
+          padding:20px 18px; line-height:1.55;
           border:1px dashed #D8CCBE; border-radius:6px;
-          width:280px; margin:0 auto;
+          width:320px; margin:0 auto;
+          font-weight:600;
         }
         @media print {
           body * { visibility:hidden !important; }
@@ -646,10 +665,11 @@ export default function CommandesB2B({onBack}) {
               💾 Sauvegarde du jour
             </button>
           )}
-          <button onClick={()=>setShowSettings(true)} style={{
-            background:"#F5F0E8",border:"1px solid #DDD4C8",borderRadius:8,
-            padding:"6px 10px",fontSize:13,cursor:"pointer",color:"#5A4030",
-          }} title="Gérer les marques et conseillers">⚙</button>
+          <button onClick={()=>setShowSettings(true)} title="Gérer les marques et conseillers" style={{
+            background:"#F5F0E8",border:"1px solid #DDD4C8",borderRadius:10,
+            padding:"7px 12px",fontSize:18,cursor:"pointer",color:"#5A4030",
+            lineHeight:1,minHeight:36,display:"flex",alignItems:"center",justifyContent:"center",
+          }}>⚙</button>
           <button onClick={openNew} style={{
             background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
             padding:"7px 16px",fontSize:12,cursor:"pointer",
@@ -875,39 +895,56 @@ export default function CommandesB2B({onBack}) {
                       <td style={{...TD_STYLE,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.modele}</td>
                       <td style={{...TD_STYLE,color:"#6A5A4A"}}>{(row.couleur||"").trim()}</td>
                       <td style={{...TD_STYLE,color:"#6A5A4A",whiteSpace:"nowrap"}}>{row.taille}</td>
-                      <td style={TD_STYLE}>{badgeEtat(row.etat)||<span style={{color:"#C0B0A0",fontSize:10}}>—</span>}</td>
+                      <td style={TD_STYLE} onClick={e=>e.stopPropagation()}>
+                        <button onClick={(e)=>setStatusMenu({row, x:e.clientX, y:e.clientY})}
+                          title="Changer le statut"
+                          style={{
+                            all:"unset",cursor:"pointer",display:"inline-block",
+                            padding:0,borderRadius:20,
+                          }}>
+                          {badgeEtat(row.etat) || (
+                            <span style={{
+                              fontSize:10,color:"#8A7A6A",fontStyle:"italic",
+                              border:"1px dashed #D8CCBE",borderRadius:20,padding:"2px 10px",
+                            }}>+ statut</span>
+                          )}
+                        </button>
+                      </td>
                       <td style={{...TD_STYLE,color:"#8A6A5A",fontSize:11,fontWeight:500}}>{row.vendeur}</td>
-                      <td style={{...TD_STYLE,whiteSpace:"nowrap"}} onClick={e=>e.stopPropagation()}>
-                        {row.marque && (
-                          <button onClick={()=>openOrderUrl(row.marque)}
-                            title={brandUrls[row.marque] ? `Commander sur ${brandUrls[row.marque]}` : "URL B2B à renseigner dans les paramètres"}
-                            style={{
-                              fontSize:11,padding:"3px 9px",
-                              background: brandUrls[row.marque] ? "#1C1510" : "#F0EBE3",
-                              border: brandUrls[row.marque] ? "1px solid #1C1510" : "1px solid #DDD4C8",
-                              borderRadius:6,cursor:"pointer",
-                              color: brandUrls[row.marque] ? "#E8DED0" : "#9A8A7A",
-                              marginRight:4,fontFamily:"'DM Sans',sans-serif",
-                            }}>🛒 Commander</button>
-                        )}
-                        {row.etat === "Client prévenu" && (
-                          <button onClick={()=>setTicketRow({
-                            ...row,
-                            articleCote: row.articleCote || [row.marque,row.modele,row.couleur&&"Couleur : "+row.couleur,row.taille&&"Taille : "+row.taille].filter(Boolean).join("\n"),
-                            deCoteJusquau: row.deCoteJusquau || fmtDate(addDays(new Date(),7)),
-                          })} title="Voir / imprimer le ticket caisse" style={{
-                            fontSize:11,padding:"3px 8px",background:"#E3F0FC",border:"1px solid #B0CDE6",
-                            borderRadius:6,cursor:"pointer",color:"#1B5E9B",marginRight:4,
-                          }}>🎫</button>
-                        )}
-                        <button onClick={()=>openEdit(row)} title="Modifier" style={{
-                          fontSize:11,padding:"3px 9px",background:"#F5F0E8",border:"1px solid #DDD4C8",
-                          borderRadius:6,cursor:"pointer",color:"#5A4030",marginRight:4,
-                        }}>✏</button>
-                        <button onClick={()=>deleteRow(row.id)} title="Supprimer" style={{
-                          fontSize:11,padding:"3px 9px",background:"#FDF0F0",border:"1px solid #F0D0D0",
-                          borderRadius:6,cursor:"pointer",color:"#9B2020",
-                        }}>✕</button>
+                      <td style={{...TD_STYLE,whiteSpace:"nowrap",padding:"8px 10px"}} onClick={e=>e.stopPropagation()}>
+                        <div style={{display:"inline-flex",gap:6,alignItems:"center"}}>
+                          {row.marque && (
+                            <button onClick={()=>openOrderUrl(row.marque)}
+                              title={brandUrls[row.marque]?.url ? `Commander sur ${brandUrls[row.marque].url}` : "URL B2B à renseigner dans les paramètres"}
+                              style={{
+                                fontSize:12,padding:"6px 12px",
+                                background: brandUrls[row.marque]?.url ? "#1C1510" : "#F0EBE3",
+                                border: brandUrls[row.marque]?.url ? "1px solid #1C1510" : "1px solid #DDD4C8",
+                                borderRadius:8,cursor:"pointer",
+                                color: brandUrls[row.marque]?.url ? "#E8DED0" : "#9A8A7A",
+                                fontFamily:"'DM Sans',sans-serif",fontWeight:500,
+                                display:"inline-flex",alignItems:"center",gap:5,
+                              }}>🛒 <span>Commander</span></button>
+                          )}
+                          {row.etat === "Client prévenu" && (
+                            <button onClick={()=>setTicketRow({
+                              ...row,
+                              articleCote: row.articleCote || [row.marque,row.modele,row.couleur&&"Couleur : "+row.couleur,row.taille&&"Taille : "+row.taille].filter(Boolean).join("\n"),
+                              deCoteJusquau: row.deCoteJusquau || fmtDate(addDays(new Date(),7)),
+                            })} title="Voir / imprimer le ticket caisse" style={{
+                              fontSize:16,padding:"5px 10px",background:"#E3F0FC",border:"1px solid #B0CDE6",
+                              borderRadius:8,cursor:"pointer",color:"#1B5E9B",lineHeight:1,
+                            }}>🎫</button>
+                          )}
+                          <button onClick={()=>openEdit(row)} title="Modifier la fiche" style={{
+                            fontSize:15,padding:"5px 10px",background:"#F5F0E8",border:"1px solid #DDD4C8",
+                            borderRadius:8,cursor:"pointer",color:"#5A4030",lineHeight:1,
+                          }}>✎</button>
+                          <button onClick={()=>deleteRow(row.id)} title="Supprimer" style={{
+                            fontSize:15,padding:"5px 10px",background:"#FDF0F0",border:"1px solid #F0D0D0",
+                            borderRadius:8,cursor:"pointer",color:"#9B2020",lineHeight:1,fontWeight:600,
+                          }}>✕</button>
+                        </div>
                       </td>
                     </tr>,
                     expanded && (row.commentaire || row.refInt || row.refFourn || row.dateValid || row.articleCote) && (
@@ -985,17 +1022,32 @@ export default function CommandesB2B({onBack}) {
                   {ETATS.map(s => <option key={s.val} value={s.val}>{s.label}</option>)}
                 </select>
               </FormField>
-              <FormField label="Nom client">
-                <input value={form.nom||""} onChange={e=>setForm(p=>({...p,nom:e.target.value}))} style={inputStyle()}/>
+              <FormField label="Nom client *">
+                <input
+                  required
+                  value={form.nom||""}
+                  onChange={e=>setForm(p=>({...p,nom: upperCaseFr(e.target.value)}))}
+                  style={{...inputStyle(),fontWeight:600}}
+                  placeholder="DUPONT"/>
               </FormField>
               <FormField label="Prénom">
-                <input value={form.prenom||""} onChange={e=>setForm(p=>({...p,prenom:e.target.value}))} style={inputStyle()}/>
+                <input
+                  value={form.prenom||""}
+                  onChange={e=>setForm(p=>({...p,prenom: nameCase(e.target.value)}))}
+                  style={inputStyle()}
+                  placeholder="Marie"/>
               </FormField>
-              <FormField label="Téléphone">
-                <input value={form.tel||""} onChange={e=>setForm(p=>({...p,tel:e.target.value}))} style={inputStyle()} placeholder="06 12 34 56 78"/>
+              <FormField label="Téléphone *">
+                <input
+                  required
+                  value={form.tel||""}
+                  onChange={e=>setForm(p=>({...p,tel:e.target.value}))}
+                  style={inputStyle()} placeholder="06 12 34 56 78"/>
               </FormField>
               <FormField label="E-mail">
-                <input type="email" value={form.email||""} onChange={e=>setForm(p=>({...p,email:e.target.value}))} style={inputStyle()} placeholder="client@email.com"/>
+                <input type="email" value={form.email||""}
+                  onChange={e=>setForm(p=>({...p,email:e.target.value.toLowerCase()}))}
+                  style={inputStyle()} placeholder="client@email.com"/>
               </FormField>
               <FormField label="Conseiller">
                 <select value={form.vendeur||""} onChange={e=>setForm(p=>({...p,vendeur:e.target.value}))} style={inputStyle()}>
@@ -1011,24 +1063,30 @@ export default function CommandesB2B({onBack}) {
                 </select>
               </FormField>
               <FormField label="Nom modèle">
-                <input value={form.modele||""} onChange={e=>setForm(p=>({...p,modele:e.target.value}))} style={inputStyle()}/>
+                <input value={form.modele||""}
+                  onChange={e=>setForm(p=>({...p,modele: upperCaseFr(e.target.value)}))}
+                  style={inputStyle()}/>
               </FormField>
               <FormField label="Réf. interne">
-                <input value={form.refInt||""} onChange={e=>setForm(p=>({...p,refInt:e.target.value}))} style={inputStyle()} placeholder="Saisie libre"/>
+                <input value={form.refInt||""}
+                  onChange={e=>setForm(p=>({...p,refInt: upperCaseFr(e.target.value)}))}
+                  style={inputStyle()} placeholder="Saisie libre"/>
               </FormField>
               <FormField label="Réf. fournisseur">
-                <input value={form.refFourn||""} onChange={e=>setForm(p=>({...p,refFourn:e.target.value}))} style={inputStyle()} placeholder="Saisie libre"/>
+                <input value={form.refFourn||""}
+                  onChange={e=>setForm(p=>({...p,refFourn: upperCaseFr(e.target.value)}))}
+                  style={inputStyle()} placeholder="Saisie libre"/>
               </FormField>
               <FormField label="Couleur">
                 {(() => {
-                  const isOther = form.couleur && !COLORS_TOP15.includes(form.couleur);
+                  const isOther = form.couleur && !COLORS_TOP15.includes(form.couleur.trim());
                   return (
                     <>
                       <select
                         value={isOther ? "__autre__" : (form.couleur || "")}
                         onChange={e => {
                           const v = e.target.value;
-                          if (v === "__autre__") setForm(p => ({...p, couleur: " "})); // marque "autre", champ libre
+                          if (v === "__autre__") setForm(p => ({...p, couleur: " "}));
                           else setForm(p => ({...p, couleur: v}));
                         }}
                         style={inputStyle()}>
@@ -1040,8 +1098,8 @@ export default function CommandesB2B({onBack}) {
                         <input
                           autoFocus
                           value={form.couleur.trim()}
-                          onChange={e => setForm(p => ({...p, couleur: e.target.value || " "}))}
-                          placeholder="Préciser la couleur"
+                          onChange={e => setForm(p => ({...p, couleur: upperCaseFr(e.target.value) || " "}))}
+                          placeholder="PRÉCISER LA COULEUR"
                           style={{...inputStyle(), marginTop:6}}/>
                       )}
                     </>
@@ -1049,11 +1107,15 @@ export default function CommandesB2B({onBack}) {
                 })()}
               </FormField>
               <FormField label="Taille">
-                <input value={form.taille||""} onChange={e=>setForm(p=>({...p,taille:e.target.value}))} style={inputStyle()}/>
+                <input value={form.taille||""}
+                  onChange={e=>setForm(p=>({...p,taille: upperCaseFr(e.target.value)}))}
+                  style={inputStyle()}/>
               </FormField>
             </div>
             <FormField label="Commentaire">
-              <textarea value={form.commentaire||""} onChange={e=>setForm(p=>({...p,commentaire:e.target.value}))} rows={3} style={{...inputStyle(),resize:"vertical",minHeight:60}}/>
+              <textarea value={form.commentaire||""}
+                onChange={e=>setForm(p=>({...p,commentaire: upperCaseFr(e.target.value)}))}
+                rows={3} style={{...inputStyle(),resize:"vertical",minHeight:60}}/>
             </FormField>
             <div style={{
               marginTop:10,padding:"8px 12px",
@@ -1099,38 +1161,34 @@ export default function CommandesB2B({onBack}) {
               </FormField>
             </div>
 
-            {/* Jour de récupération souhaité — calendrier + raccourcis */}
-            <div style={{
-              background:"#F0F5FB",border:"1px solid #D6E4F0",borderRadius:10,
-              padding:"12px 14px",marginBottom:18,
-            }}>
-              <label style={{
-                display:"block",fontSize:10,color:"#1B5E9B",
-                fontFamily:"'DM Sans',sans-serif",fontWeight:700,
-                textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,
-              }}>📅 Jour de récupération de la commande</label>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                <input type="date" value={ticketRow.dateRecup||""}
-                  onChange={e=>setTicketRow(r=>({...r,dateRecup:e.target.value}))}
-                  style={{...inputStyle(),maxWidth:180}}/>
-                {[
-                  {l:"Par défaut (J+7)", d:7},
-                  {l:"+3 j", d:3},
-                  {l:"+14 j", d:14},
-                ].map(p => (
-                  <button key={p.l} onClick={()=>setTicketRow(r=>({...r,dateRecup:fmtDate(addDays(new Date(),p.d))}))}
-                    style={{
-                      fontSize:11,padding:"6px 10px",background:"#FFF",
-                      border:"1px solid #B0CDE6",borderRadius:7,cursor:"pointer",
-                      color:"#1B5E9B",fontFamily:"'DM Sans',sans-serif",
-                    }}>{p.l}</button>
-                ))}
+            {/* Si pas de date "de côté" : option Message Vocal ce jour */}
+            {!ticketRow.deCoteJusquau && (
+              <div style={{
+                background:"#F0F5FB",border:"1px solid #D6E4F0",borderRadius:10,
+                padding:"12px 14px",marginBottom:18,
+              }}>
+                <label style={{
+                  display:"flex",alignItems:"center",gap:10,cursor:"pointer",
+                  fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#1B5E9B",fontWeight:600,
+                }}>
+                  <input type="checkbox"
+                    checked={!!ticketRow.messageVocal}
+                    onChange={e=>setTicketRow(r=>({...r, messageVocal: e.target.checked}))}
+                    style={{width:18,height:18,accentColor:"#1B5E9B",cursor:"pointer"}}/>
+                  📞 Message vocal ce jour
+                </label>
+                {ticketRow.messageVocal && (
+                  <div style={{marginTop:8,paddingLeft:28,fontSize:11,color:"#5C7AA0",fontFamily:"'DM Sans',sans-serif"}}>
+                    Ticket imprimé avec la date du jour ({fmtDateFr(fmtDate(new Date()))}) ·
+                    relance client à partir du <b>{fmtDateFr(fmtDate(addDays(new Date(),5)))}</b>.
+                  </div>
+                )}
               </div>
-            </div>
+            )}
             <FormField label="Quel article reste de côté ?">
               <textarea value={ticketRow.articleCote||""}
-                onChange={e=>setTicketRow(r=>({...r,articleCote:e.target.value}))}
-                rows={4} style={{...inputStyle(),resize:"vertical",minHeight:80,fontFamily:"'Courier New',monospace"}}/>
+                onChange={e=>setTicketRow(r=>({...r,articleCote: upperCaseFr(e.target.value)}))}
+                rows={4} style={{...inputStyle(),resize:"vertical",minHeight:80,fontFamily:"'Courier New',monospace",fontWeight:600}}/>
             </FormField>
 
             <div style={{
@@ -1142,41 +1200,70 @@ export default function CommandesB2B({onBack}) {
 
             <div className="ticket-printable">
               <div className="ticket-paper">
-                <div style={{textAlign:"center",fontSize:11,letterSpacing:"0.1em",borderBottom:"1px dashed #8A7A6A",paddingBottom:6,marginBottom:10}}>
-                  ━━━━━━━━━━━━━━━━━━<br/>
-                  <b style={{fontSize:13}}>COMMANDE CLIENT</b><br/>
-                  ━━━━━━━━━━━━━━━━━━
+                {/* Logo CLOANE */}
+                <div style={{textAlign:"center",paddingBottom:8}}>
+                  <img src={CLOANE_LOGO} alt="CLOANE"
+                    style={{width:"75%",maxWidth:200,display:"block",margin:"0 auto"}}/>
                 </div>
-                <div style={{fontSize:13,lineHeight:1.7}}>
-                  <b style={{fontSize:14}}>{(ticketRow.nom||"").toUpperCase()} {ticketRow.prenom||""}</b><br/>
+                <div style={{textAlign:"center",fontSize:13,letterSpacing:"0.16em",borderTop:"2px dashed #1C1510",borderBottom:"2px dashed #1C1510",padding:"8px 0",margin:"4px 0 12px"}}>
+                  <b style={{fontWeight:900,fontSize:15}}>COMMANDE CLIENT</b>
+                </div>
+
+                {/* Identité client — gros et gras */}
+                <div style={{textAlign:"center",fontSize:16,lineHeight:1.6,fontWeight:900,marginBottom:6}}>
+                  {(ticketRow.nom||"").toUpperCase()} {ticketRow.prenom||""}
+                </div>
+                <div style={{textAlign:"center",fontSize:14,fontWeight:700,marginBottom:14}}>
                   {ticketRow.tel ? fmtPhone(ticketRow.tel) : "—"}
                 </div>
-                <div style={{margin:"14px 0",borderTop:"1px dashed #C8B89A",paddingTop:12,fontSize:12,textAlign:"center"}}>
-                  <div style={{fontSize:10,color:"#6A5A4A",marginBottom:4,letterSpacing:"0.08em"}}>DE CÔTÉ JUSQU'AU</div>
-                  <div style={{fontSize:16,fontWeight:700,letterSpacing:"0.06em"}}>
-                    {ticketRow.deCoteJusquau ? fmtDateFr(ticketRow.deCoteJusquau) : "__ / __ / ____"}
+
+                {/* Bloc DE CÔTÉ JUSQU'AU ou MESSAGE VOCAL */}
+                {ticketRow.deCoteJusquau ? (
+                  <div style={{margin:"14px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"12px 0",textAlign:"center"}}>
+                    <div style={{fontSize:11,marginBottom:6,letterSpacing:"0.14em",fontWeight:700}}>DE CÔTÉ JUSQU'AU</div>
+                    <div style={{fontSize:22,fontWeight:900,letterSpacing:"0.08em"}}>
+                      {fmtDateFr(ticketRow.deCoteJusquau)}
+                    </div>
                   </div>
-                </div>
-                {ticketRow.dateRecup && (
-                  <div style={{margin:"10px 0",fontSize:12,textAlign:"center"}}>
-                    <div style={{fontSize:10,color:"#6A5A4A",marginBottom:3,letterSpacing:"0.08em"}}>JOUR DE RÉCUPÉRATION</div>
-                    <b style={{fontSize:14}}>{fmtDateFr(ticketRow.dateRecup)}</b>
+                ) : ticketRow.messageVocal ? (
+                  <div style={{margin:"14px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"12px 0",textAlign:"center"}}>
+                    <div style={{fontSize:11,marginBottom:6,letterSpacing:"0.14em",fontWeight:700}}>MESSAGE VOCAL CE JOUR</div>
+                    <div style={{fontSize:18,fontWeight:900,letterSpacing:"0.06em"}}>
+                      {fmtDateFr(fmtDate(new Date()))}
+                    </div>
                   </div>
-                )}
-                <div style={{margin:"10px 0",fontSize:11,textAlign:"center"}}>
-                  <div style={{color:"#6A5A4A",fontSize:10,letterSpacing:"0.08em",marginBottom:3}}>CONSEILLER</div>
-                  <b style={{fontSize:12}}>{ticketRow.vendeur||"—"}</b>
+                ) : null}
+
+                {/* Conseiller */}
+                <div style={{textAlign:"center",margin:"10px 0",fontSize:12}}>
+                  <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:3,fontWeight:700}}>CONSEILLER</div>
+                  <b style={{fontSize:14,fontWeight:900}}>{ticketRow.vendeur||"—"}</b>
                 </div>
+
+                {/* Article réservé */}
                 {ticketRow.articleCote && (
-                  <div style={{marginTop:14,paddingTop:10,borderTop:"1px dashed #C8B89A",fontSize:11,whiteSpace:"pre-line",textAlign:"center"}}>
-                    <div style={{fontSize:9,color:"#6A5A4A",letterSpacing:"0.08em",marginBottom:4}}>ARTICLE RÉSERVÉ</div>
+                  <div style={{marginTop:14,paddingTop:10,borderTop:"1px dashed #1C1510",fontSize:13,whiteSpace:"pre-line",textAlign:"center",fontWeight:700,lineHeight:1.55}}>
+                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:6,fontWeight:700}}>ARTICLE RÉSERVÉ</div>
                     {ticketRow.articleCote}
                   </div>
                 )}
-                <div style={{textAlign:"center",marginTop:14,fontSize:9,color:"#8A7A6A",letterSpacing:"0.16em"}}>
-                  ━━━━━━━━━━━━━━━━━━<br/>
-                  C L O A N E
-                </div>
+
+                {/* Pied : REMETTRE EN RAYON LE… ou RELANCER LE CLIENT À PARTIR DU… */}
+                {ticketRow.deCoteJusquau ? (
+                  <div style={{textAlign:"center",marginTop:16,paddingTop:10,borderTop:"2px dashed #1C1510",fontSize:12}}>
+                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:5,fontWeight:700}}>REMETTRE EN RAYON LE</div>
+                    <div style={{fontSize:17,fontWeight:900,letterSpacing:"0.06em"}}>
+                      {fmtDateFr(fmtDate(addDays(parseDate(ticketRow.deCoteJusquau) || new Date(), 7)))}
+                    </div>
+                  </div>
+                ) : ticketRow.messageVocal ? (
+                  <div style={{textAlign:"center",marginTop:16,paddingTop:10,borderTop:"2px dashed #1C1510",fontSize:12}}>
+                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:5,fontWeight:700}}>RELANCER LE CLIENT À PARTIR DU</div>
+                    <div style={{fontSize:17,fontWeight:900,letterSpacing:"0.06em"}}>
+                      {fmtDateFr(fmtDate(addDays(new Date(), 5)))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1228,41 +1315,60 @@ export default function CommandesB2B({onBack}) {
                     }}>+ Ajouter</button>
                   </div>
                   <div style={{fontSize:10,color:"#A09080",fontFamily:"'DM Sans',sans-serif",marginBottom:10,letterSpacing:"0.04em"}}>
-                    Renseignez l'URL B2B de chaque fournisseur : elle sera utilisée par le bouton 🛒 Commander du tableau.
+                    URL B2B, téléphone et e-mail du contact commercial. L'URL est utilisée par le bouton 🛒 Commander.
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {brands.map(b => (
-                      <div key={b} style={{
-                        display:"flex",alignItems:"center",gap:8,
-                        background:"#FAFAF8",border:"1px solid #EDE4D5",borderRadius:10,
-                        padding:"7px 8px 7px 12px",
-                      }}>
-                        <span style={{
-                          fontSize:11,fontFamily:"'DM Sans',sans-serif",fontWeight:600,
-                          color:"#4A2C1A",minWidth:120,flexShrink:0,
-                        }}>{b}</span>
-                        <input
-                          value={brandUrls[b] || ""}
-                          onChange={e=>setBrandUrl(b, e.target.value)}
-                          placeholder="URL B2B (ex : b2b.marque.com)"
-                          style={{
-                            flex:1,padding:"6px 9px",fontSize:11,
-                            fontFamily:"'DM Sans',sans-serif",
-                            border:"1px solid #E0D8CE",borderRadius:7,
-                            background:"#FFF",color:"#1C1510",minWidth:80,
-                          }}/>
-                        {brandUrls[b] && (
-                          <button onClick={()=>openOrderUrl(b)} title="Tester le lien" style={{
-                            background:"#E3F0FC",border:"1px solid #B0CDE6",borderRadius:6,
-                            padding:"5px 8px",fontSize:11,cursor:"pointer",color:"#1B5E9B",flexShrink:0,
-                          }}>↗</button>
-                        )}
-                        <button onClick={()=>removeBrand(b)} title="Supprimer" style={{
-                          background:"#FDEEEE",border:"none",borderRadius:"50%",
-                          width:22,height:22,cursor:"pointer",color:"#9B2020",fontSize:13,lineHeight:1,flexShrink:0,
-                        }}>×</button>
-                      </div>
-                    ))}
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {brands.map(b => {
+                      const info = brandUrls[b] || {url:"",tel:"",email:""};
+                      const fieldStyle = {
+                        flex:1,padding:"6px 9px",fontSize:11,
+                        fontFamily:"'DM Sans',sans-serif",
+                        border:"1px solid #E0D8CE",borderRadius:7,
+                        background:"#FFF",color:"#1C1510",minWidth:0,
+                      };
+                      return (
+                        <div key={b} style={{
+                          background:"#FAFAF8",border:"1px solid #EDE4D5",borderRadius:10,
+                          padding:"10px 12px",
+                        }}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+                            <span style={{
+                              fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:700,
+                              color:"#4A2C1A",letterSpacing:"0.04em",
+                            }}>{b}</span>
+                            <div style={{display:"flex",gap:6}}>
+                              {info.url && (
+                                <button onClick={()=>openOrderUrl(b)} title="Tester le lien" style={{
+                                  background:"#E3F0FC",border:"1px solid #B0CDE6",borderRadius:6,
+                                  padding:"4px 8px",fontSize:11,cursor:"pointer",color:"#1B5E9B",
+                                }}>↗ Ouvrir</button>
+                              )}
+                              <button onClick={()=>removeBrand(b)} title="Supprimer" style={{
+                                background:"#FDEEEE",border:"none",borderRadius:"50%",
+                                width:24,height:24,cursor:"pointer",color:"#9B2020",fontSize:14,lineHeight:1,
+                              }}>×</button>
+                            </div>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:6}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:11,width:18,textAlign:"center"}}>🔗</span>
+                              <input value={info.url||""} onChange={e=>setBrandField(b,"url",e.target.value)}
+                                placeholder="URL B2B (ex : b2b.marque.com)" style={fieldStyle}/>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:11,width:18,textAlign:"center"}}>📞</span>
+                              <input value={info.tel||""} onChange={e=>setBrandField(b,"tel",e.target.value)}
+                                placeholder="Téléphone du contact commercial" style={fieldStyle}/>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:11,width:18,textAlign:"center"}}>✉️</span>
+                              <input type="email" value={info.email||""} onChange={e=>setBrandField(b,"email",e.target.value)}
+                                placeholder="E-mail du contact" style={fieldStyle}/>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               ) : (
@@ -1339,6 +1445,64 @@ export default function CommandesB2B({onBack}) {
         </div>
       )}
 
+      {/* ── STATUS POPOVER (clic sur le statut d'une ligne) ───────────── */}
+      {statusMenu && (
+        <div onClick={()=>setStatusMenu(null)} style={{
+          position:"fixed",inset:0,zIndex:1100,background:"transparent",
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            position:"fixed",
+            top: Math.min(statusMenu.y + 8, (typeof window!=="undefined"?window.innerHeight:800) - 380),
+            left: Math.min(statusMenu.x, (typeof window!=="undefined"?window.innerWidth:1000) - 260),
+            background:"#FFFCF8",borderRadius:14,
+            border:"1px solid #EDE4D5",boxShadow:"0 16px 48px rgba(0,0,0,0.18)",
+            width:250,overflow:"hidden",
+          }}>
+            <div style={{padding:"11px 16px",borderBottom:"1px solid #EDE4D5",background:"#FAF5EC"}}>
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#8A7A6A",letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:600,marginBottom:3}}>
+                Changer le statut
+              </div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:"#1C1510"}}>
+                {(statusMenu.row.nom||"").toUpperCase()} {statusMenu.row.prenom||""}
+              </div>
+            </div>
+            {ETATS.map(s => {
+              const isCurrent = statusMenu.row.etat === s.val;
+              return (
+                <button key={s.val}
+                  onClick={()=>{
+                    if (!isCurrent) {
+                      const today = fmtDate(new Date());
+                      updateRow(statusMenu.row.id, {etat: s.val, dateValid: today});
+                      if (s.val === "Client prévenu") {
+                        const r = statusMenu.row;
+                        setTimeout(()=>setTicketRow({
+                          ...r, etat: s.val, dateValid: today,
+                          articleCote: r.articleCote || [r.marque, r.modele, r.couleur && "Couleur : "+r.couleur, r.taille && "Taille : "+r.taille].filter(Boolean).join("\n"),
+                          deCoteJusquau: r.deCoteJusquau || fmtDate(addDays(new Date(), 7)),
+                        }), 150);
+                      }
+                    }
+                    setStatusMenu(null);
+                  }}
+                  style={{
+                    display:"flex",alignItems:"center",gap:10,width:"100%",
+                    padding:"9px 16px",background: isCurrent?"#F0EBE3":"transparent",
+                    border:"none",borderBottom:"1px solid #F4EFE6",cursor:"pointer",
+                    fontFamily:"'DM Sans',sans-serif",fontSize:12,
+                    color: isCurrent?"#1C1510":"#2C1E0F",
+                    textAlign:"left",borderLeft:`3px solid ${s.color}`,
+                    fontWeight: isCurrent?700:500,
+                  }}>
+                  <span style={{flex:1}}>{s.label}</span>
+                  {isCurrent && <span style={{fontSize:10,color:s.color}}>● actuel</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1360,7 +1524,8 @@ function Modal({children, onClose, title, maxWidth=640}) {
     <div onClick={onClose} style={{
       position:"fixed",inset:0,zIndex:1000,
       background:"rgba(28,21,16,0.55)",backdropFilter:"blur(4px)",
-      display:"flex",alignItems:"center",justifyContent:"center",padding:16,
+      display:"flex",alignItems:"flex-start",justifyContent:"center",
+      padding:"32px 16px 24px",overflowY:"auto",
     }}>
       <div onClick={e=>e.stopPropagation()} style={{
         background:"#FFFCF8",borderRadius:18,width:"100%",maxWidth,
