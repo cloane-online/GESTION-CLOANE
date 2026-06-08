@@ -35,7 +35,25 @@ Ouvrez l'adresse affichée (ex. `http://localhost:5173`).
 
 ---
 
-## 3. Déployer sur Netlify
+## 3. Déployer sur Vercel
+
+1. Pousse ce dossier sur GitHub (ou réutilise le dépôt existant).
+2. Sur [vercel.com](https://vercel.com) → **Add New → Project** → importe le dépôt GitHub.
+3. **Framework Preset** : Vercel doit détecter **Vite** automatiquement. Sinon, choisis-le manuellement dans la liste.
+   - Build Command : `npm run build` (déjà rempli par le preset)
+   - Output Directory : `dist` (déjà rempli)
+4. Déplie **Environment Variables** et ajoute :
+   - `VITE_SUPABASE_URL` = `https://votre-projet.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = votre clé `anon public` (PAS service_role)
+5. Clique **Deploy**. En 2 minutes, l'app est en ligne.
+
+Le fichier `vercel.json` est déjà configuré pour gérer le routage SPA.
+
+⚠️ Le plan gratuit Vercel (Hobby) est destiné à un usage personnel non commercial. Pour un usage en magasin, le plan Pro à 20 $/mois est requis selon les conditions Vercel.
+
+---
+
+## 4. Déployer sur Netlify (alternative)
 
 ### Option A — Connecté à GitHub (recommandé)
 1. Poussez ce dossier sur un dépôt GitHub.

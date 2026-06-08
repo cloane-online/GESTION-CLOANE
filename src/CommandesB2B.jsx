@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import * as db from "./supabaseClient";
+import { MAGASINS, MAGASIN_CODES, magasinNom, magasinTel } from "./magasins";
 
 // ════════════════════════════════════════════════════════════════════════════
 //   CONSTANTES — listes officielles (feuille 2 du tableau source)
@@ -122,18 +123,39 @@ function nameCase(s) {
   return s.toLowerCase().replace(/(^|[\s\-'\u2019])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
 }
 
-function buildClientMessage(row, magasin = "CLOANE SQUARE") {
+// Message "commande arrivée" — magasin = code (SQUARE/SIGNATURE/STORE)
+function buildClientMessage(row, magasinCode) {
   const prenom = (row.prenom || "").trim() || "";
   const marque = (row.marque || "").trim();
+  const m = MAGASINS[magasinCode] || MAGASINS.SQUARE;
   return (
 `Bonjour ${prenom},
 
 Votre commande${marque ? " de la marque " + marque : ""} est bien arrivée en magasin.
 
-Merci de nous recontacter afin de confirmer votre futur passage pour le récupérer.
+Merci de nous recontacter afin de confirmer votre futur passage pour la récupérer.
 
 En vous souhaitant une bonne journée,
-L'équipe ${magasin}`
+L'équipe ${m.nom}
+${m.tel}`
+  );
+}
+
+// Message "rupture de stock" — désolé, recontacter plus tard dans la saison
+function buildRuptureMessage(row, magasinCode) {
+  const prenom = (row.prenom || "").trim() || "";
+  const marque = (row.marque || "").trim();
+  const m = MAGASINS[magasinCode] || MAGASINS.SQUARE;
+  return (
+`Bonjour ${prenom},
+
+Nous sommes désolés de vous informer que votre commande${marque ? " de la marque " + marque : ""} est malheureusement en rupture de stock chez notre fournisseur.
+
+N'hésitez pas à nous recontacter plus tard dans la saison, au cas où ce produit reviendrait disponible.
+
+Avec toutes nos excuses,
+L'équipe ${m.nom}
+${m.tel}`
   );
 }
 
@@ -209,7 +231,7 @@ function FilterTag({label, onRemove}) {
 //   MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════
 
-export default function CommandesB2B({onBack}) {
+export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -243,33 +265,68 @@ export default function CommandesB2B({onBack}) {
   const [newVendorInput, setNewVendorInput] = useState("");
   const [contactMenu, setContactMenu] = useState(null); // {row, x, y} popover contact client
   const [statusMenu, setStatusMenu] = useState(null);   // {row, x, y} popover changement de statut
+  const [ruptureRow, setRuptureRow] = useState(null);   // modal "rupture stock — prévenir client"
 
-  // ── CHARGEMENT depuis Supabase + purge auto au montage ─────────────────────
-  // Règle : on garde les 60 derniers jours sauf statut "commandé",
-  //          et on supprime les "Produit encaissé" de plus de 15 jours.
+  // Multi-magasins : magasin actif (filtre)
+  // null = tous les magasins (managers + vendeurs multi-magasins)
+  const userMagasins = profile?.magasins || [];
+  const isManager = profile?.role === "manager";
+  const [activeMagasin, setActiveMagasin] = useState(
+    userMagasins.length === 1 ? userMagasins[0] : null
+  );
+
+  // Vue archives (par défaut désactivé)
+  const [showArchive, setShowArchive] = useState(false);
+
+  // ── CHARGEMENT depuis Supabase + auto-archive au montage ───────────────────
+  // Règles :
+  //   • "Produit encaissé" plus vieux que 6 jours → passe en archive
+  //   • Commande archivée depuis plus de 5 jours → suppression définitive
+  //   • Commandes hors statut "commandé" plus vieilles que 60 jours → archive
   useEffect(() => {
     (async () => {
       try {
         const rows = await db.fetchOrders();
         const today = new Date();
-        const sixtyAgo = addDays(today, -60);
-        const fifteenAgo = addDays(today, -15);
-        let removed = 0;
-        const stale = [];
-        const cleaned = rows.filter(r => {
-          if (r.etat === "Produit encaissé") {
-            const dv = parseDate(r.dateValid) || parseDate(r.date);
-            if (dv && dv < fifteenAgo) { stale.push(r.id); removed++; return false; }
-          }
-          if (!STATUTS_COMMANDE.includes(r.etat)) {
-            const dc = parseDate(r.date);
-            if (dc && dc < sixtyAgo) { stale.push(r.id); removed++; return false; }
-          }
-          return true;
-        });
-        if (stale.length) db.deleteOrders(stale).catch(e => console.error("purge", e));
+        const sixDaysAgo = addDays(today, -6);
+        const sixtyDaysAgo = addDays(today, -60);
+        const fiveDaysAgo = new Date(today.getTime() - 5*86400000);
+
+        // 1. Suppression définitive : archivées depuis +5 jours
+        const toDelete = rows
+          .filter(r => r.archivedAt && new Date(r.archivedAt) < fiveDaysAgo)
+          .map(r => r.id);
+        if (toDelete.length) db.deleteOrders(toDelete).catch(e => console.error("delete archived", e));
+
+        // 2. Auto-archive : "Produit encaissé" de +6 jours, et anciennes commandes de +60 jours
+        const toArchive = rows
+          .filter(r => !r.archivedAt) // pas déjà archivée
+          .filter(r => {
+            if (r.etat === "Produit encaissé") {
+              const dv = parseDate(r.dateValid) || parseDate(r.date);
+              return dv && dv < sixDaysAgo;
+            }
+            if (!STATUTS_COMMANDE.includes(r.etat)) {
+              const dc = parseDate(r.date);
+              return dc && dc < sixtyDaysAgo;
+            }
+            return false;
+          })
+          .map(r => r.id);
+
+        let archivedNow = null;
+        if (toArchive.length) {
+          try { archivedNow = await db.archiveOrders(toArchive); }
+          catch (e) { console.error("archive", e); }
+        }
+
+        // 3. Mettre à jour la liste locale
+        const cleaned = rows
+          .filter(r => !toDelete.includes(r.id))
+          .map(r => toArchive.includes(r.id) ? {...r, archivedAt: archivedNow || new Date().toISOString()} : r);
+
         setData(cleaned);
-        setArchiveCount(removed);
+        setArchiveCount(toArchive.length + toDelete.length);
       } catch (e) {
         console.error("Chargement Supabase échoué :", e);
         setLoadError(true);
@@ -283,6 +340,15 @@ export default function CommandesB2B({onBack}) {
   // ── Filtering & sorting ──
   const filtered = useMemo(() => {
     let d = data;
+    // 1. Filtre par magasin actif (si "Tous" → garde les magasins autorisés)
+    if (activeMagasin) {
+      d = d.filter(r => r.magasin === activeMagasin);
+    } else {
+      d = d.filter(r => userMagasins.includes(r.magasin));
+    }
+    // 2. Onglet : Actives ou Archivées
+    d = d.filter(r => showArchive ? !!r.archivedAt : !r.archivedAt);
+    // 3. Filtres existants
     if (filters.etat) d = d.filter(r => r.etat === filters.etat);
     if (filters.marque) d = d.filter(r => r.marque === filters.marque);
     if (filters.vendeur) d = d.filter(r => r.vendeur === filters.vendeur);
@@ -349,11 +415,26 @@ export default function CommandesB2B({onBack}) {
     }
   }
 
+  // Suppression manuelle = archivage (visible 5 jours dans l'onglet Archivé puis suppression auto)
+  // Sauf si déjà archivé : auquel cas suppression définitive
   function deleteRow(id) {
-    if (!confirm("Supprimer cette commande ?")) return;
-    setData(d => d.filter(r => r.id !== id));
-    setSelected(s => { const n = new Set(s); n.delete(id); return n; });
-    db.deleteOrder(id).catch(e => console.error("deleteOrder", e));
+    const row = data.find(r => r.id === id);
+    if (!row) return;
+    const isArchived = !!row.archivedAt;
+    const msg = isArchived
+      ? "Supprimer DÉFINITIVEMENT cette commande archivée ?"
+      : "Archiver cette commande ? Elle restera visible 5 jours dans l'onglet Archivé puis sera supprimée automatiquement.";
+    if (!confirm(msg)) return;
+    if (isArchived) {
+      setData(d => d.filter(r => r.id !== id));
+      setSelected(s => { const n = new Set(s); n.delete(id); return n; });
+      db.deleteOrder(id).catch(e => console.error("deleteOrder", e));
+    } else {
+      const now = new Date().toISOString();
+      setData(d => d.map(r => r.id === id ? {...r, archivedAt: now} : r));
+      setSelected(s => { const n = new Set(s); n.delete(id); return n; });
+      db.archiveOrders([id]).catch(e => console.error("archive", e));
+    }
   }
 
   function openNew() {
@@ -382,17 +463,23 @@ export default function CommandesB2B({onBack}) {
       const oldRow = data.find(r => r.id === editId);
       const statusChanged = oldRow && oldRow.etat !== form.etat;
       const newDateValid = statusChanged ? today : form.dateValid;
-      updateRow(editId, {...form, dateValid: newDateValid});
+      const merged = {...form, dateValid: newDateValid, magasin: form.magasin || oldRow?.magasin};
+      updateRow(editId, merged);
       if (statusChanged && form.etat === "Client prévenu") {
         setTimeout(() => setTicketRow({
-          ...form, id: editId, dateValid: newDateValid,
+          ...merged, id: editId,
           articleCote: form.articleCote || [form.marque, form.modele, form.couleur && "Couleur : "+form.couleur, form.taille && "Taille : "+form.taille].filter(Boolean).join("\n"),
           deCoteJusquau: form.deCoteJusquau || fmtDate(addDays(new Date(), 7)),
         }), 200);
       }
+      if (statusChanged && form.etat === "Rupture Stock") {
+        setTimeout(() => setRuptureRow({...merged, id: editId}), 200);
+      }
       setShowEdit(false);
     } else {
-      const draft = {...form, date: form.date || today};
+      // Magasin par défaut : le magasin actif, sinon le premier magasin du profil
+      const magasin = form.magasin || activeMagasin || userMagasins[0] || "SQUARE";
+      const draft = {...form, magasin, date: form.date || today};
       setShowEdit(false);
       try {
         const newRow = await db.insertOrder(draft);
@@ -403,6 +490,9 @@ export default function CommandesB2B({onBack}) {
             articleCote: newRow.articleCote || [newRow.marque, newRow.modele, newRow.couleur && "Couleur : "+newRow.couleur, newRow.taille && "Taille : "+newRow.taille].filter(Boolean).join("\n"),
             deCoteJusquau: newRow.deCoteJusquau || fmtDate(addDays(new Date(), 7)),
           }), 200);
+        }
+        if (newRow.etat === "Rupture Stock") {
+          setTimeout(() => setRuptureRow(newRow), 200);
         }
       } catch (e) {
         console.error("insertOrder", e);
@@ -478,15 +568,46 @@ export default function CommandesB2B({onBack}) {
     setBrandUrls(u => { const n = {...u}; delete n[name]; return n; });
   }
   // Ouvre le site B2B de la marque (bouton "Commander")
-  function openOrderUrl(marque) {
-    const url = (brandUrls[marque]?.url || "").trim();
-    if (!url) {
-      alert(`Aucune URL B2B enregistrée pour « ${marque} ».\nAjoutez-la dans ⚙ Paramètres → Fournisseurs.`);
-      setShowSettings(true); setSettingsTab("brands");
+  // Bouton "Commander" : ouvre le site B2B si URL renseignée,
+  // sinon ouvre un mail prérempli au fournisseur si email renseigné,
+  // sinon propose d'aller renseigner l'un ou l'autre.
+  function openOrderUrl(row) {
+    // Supporte les 2 signatures : openOrderUrl(row) ou openOrderUrl(marqueString)
+    const marque = typeof row === "string" ? row : row?.marque;
+    if (!marque) return;
+    const info = brandUrls[marque] || {};
+    const url = (info.url || "").trim();
+    const email = (info.email || "").trim();
+
+    if (url) {
+      const full = /^https?:\/\//i.test(url) ? url : "https://" + url;
+      window.open(full, "_blank", "noopener");
       return;
     }
-    const full = /^https?:\/\//i.test(url) ? url : "https://" + url;
-    window.open(full, "_blank", "noopener");
+    if (email) {
+      const m = MAGASINS[row?.magasin || activeMagasin || "SQUARE"] || MAGASINS.SQUARE;
+      const subject = encodeURIComponent(`Commande client — ${marque} — ${m.nom}`);
+      const body = encodeURIComponent(buildSupplierOrderMessage(row, marque, m));
+      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+      return;
+    }
+    alert(
+      `Aucun lien B2B ni e-mail enregistrés pour « ${marque} ».\n` +
+      `Renseignez au moins l'un des deux dans ⚙ Paramètres → Fournisseurs.`
+    );
+    setShowSettings(true); setSettingsTab("brands");
+  }
+  // Construit le mail au fournisseur avec le détail de la commande
+  function buildSupplierOrderMessage(row, marque, magasin) {
+    const lines = ["Bonjour,", "", "Pourriez-vous nous expédier l'article suivant pour une commande client :", ""];
+    lines.push(`Marque : ${marque}`);
+    if (row?.modele)    lines.push(`Modèle : ${row.modele}`);
+    if (row?.refInt)    lines.push(`Référence interne : ${row.refInt}`);
+    if (row?.refFourn)  lines.push(`Référence fournisseur : ${row.refFourn}`);
+    if (row?.couleur && row.couleur.trim()) lines.push(`Couleur : ${row.couleur.trim()}`);
+    if (row?.taille)    lines.push(`Taille : ${row.taille}`);
+    lines.push("", "Merci d'avance,", `L'équipe ${magasin.nom}`, magasin.tel);
+    return lines.join("\n");
   }
   // Met à jour une info fournisseur (url, tel ou email)
   function setBrandField(name, field, value) {
@@ -495,27 +616,50 @@ export default function CommandesB2B({onBack}) {
       [name]: { url:"", tel:"", email:"", ...(u[name]||{}), [field]: value }
     }));
   }
-  // Contact client : WhatsApp / Mail avec message prérempli
+  // Contact client : WhatsApp / Mail / SMS avec message + tracker boolean
   function sendWhatsApp(row) {
     const intl = phoneIntl(row.tel);
     if (!intl) { alert("Numéro de téléphone manquant."); return; }
-    const msg = encodeURIComponent(buildClientMessage(row));
+    const msg = encodeURIComponent(buildClientMessage(row, row.magasin));
     window.open(`https://wa.me/${intl}?text=${msg}`, "_blank", "noopener");
+    updateRow(row.id, { msgWhatsapp: true });
     setContactMenu(null);
   }
   function sendMail(row) {
     if (!row.email) { alert("Aucune adresse e-mail renseignée pour ce client (fiche commande)."); return; }
     const subject = encodeURIComponent("Votre commande CLOANE est arrivée");
-    const body = encodeURIComponent(buildClientMessage(row));
+    const body = encodeURIComponent(buildClientMessage(row, row.magasin));
     window.location.href = `mailto:${row.email}?subject=${subject}&body=${body}`;
+    updateRow(row.id, { mailEnvoye: true });
     setContactMenu(null);
   }
   function sendSMS(row) {
     const tel = normalizePhone(row.tel);
     if (!tel) { alert("Numéro de téléphone manquant."); return; }
-    const body = encodeURIComponent(buildClientMessage(row));
+    const body = encodeURIComponent(buildClientMessage(row, row.magasin));
     window.location.href = `sms:${tel}?&body=${body}`;
     setContactMenu(null);
+  }
+  // Mêmes fonctions mais pour le message "rupture de stock"
+  function sendRuptureWhatsApp(row) {
+    const intl = phoneIntl(row.tel);
+    if (!intl) { alert("Numéro de téléphone manquant."); return; }
+    const msg = encodeURIComponent(buildRuptureMessage(row, row.magasin));
+    window.open(`https://wa.me/${intl}?text=${msg}`, "_blank", "noopener");
+    updateRow(row.id, { msgWhatsapp: true });
+  }
+  function sendRuptureMail(row) {
+    if (!row.email) { alert("Aucune adresse e-mail renseignée pour ce client."); return; }
+    const subject = encodeURIComponent("Votre commande CLOANE");
+    const body = encodeURIComponent(buildRuptureMessage(row, row.magasin));
+    window.location.href = `mailto:${row.email}?subject=${subject}&body=${body}`;
+    updateRow(row.id, { mailEnvoye: true });
+  }
+  function sendRuptureSMS(row) {
+    const tel = normalizePhone(row.tel);
+    if (!tel) { alert("Numéro de téléphone manquant."); return; }
+    const body = encodeURIComponent(buildRuptureMessage(row, row.magasin));
+    window.location.href = `sms:${tel}?&body=${body}`;
   }
   function addVendor() {
     const name = newVendorInput.trim().toUpperCase();
@@ -599,16 +743,23 @@ export default function CommandesB2B({onBack}) {
           background:#FFFCF5; color:#1C1510;
           padding:20px 18px; line-height:1.55;
           border:1px dashed #D8CCBE; border-radius:6px;
-          width:320px; margin:0 auto;
-          font-weight:600;
+          width:280px; margin:0 auto;
+          font-weight:700;
+        }
+        @media (max-width: 640px) {
+          .hide-on-mobile { display:none !important; }
         }
         @media print {
           body * { visibility:hidden !important; }
           .ticket-printable, .ticket-printable * { visibility:visible !important; }
           .ticket-printable {
             position:fixed !important; top:0 !important; left:0 !important;
-            width:76mm !important; padding:8mm !important;
+            width:76mm !important; padding:4mm 3mm !important;
             border:none !important; background:#fff !important;
+          }
+          .ticket-paper {
+            width:100% !important; border:none !important; padding:0 !important;
+            margin:0 !important; background:#fff !important;
           }
           @page { size:76mm auto; margin:0; }
         }
@@ -619,63 +770,82 @@ export default function CommandesB2B({onBack}) {
         position:"sticky",top:0,zIndex:50,
         background:"rgba(244,240,232,0.96)",backdropFilter:"blur(12px)",
         borderBottom:"1px solid rgba(200,169,110,0.2)",
-        padding:"0 24px",display:"flex",alignItems:"center",
-        justifyContent:"space-between",height:60,gap:12,flexWrap:"wrap",
+        padding:"0 16px",display:"flex",alignItems:"center",
+        justifyContent:"space-between",minHeight:60,gap:8,flexWrap:"wrap",
       }}>
-        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          {onBack ? (
-            <>
-              <button onClick={onBack} style={{
-                all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:6,
-                color:"#8A7A6A",fontSize:11,fontFamily:"'DM Sans',sans-serif",
-                letterSpacing:"0.12em",textTransform:"uppercase",
-              }}>
-                <span style={{fontSize:16}}>←</span>Menu
-              </button>
-              <div style={{width:1,height:18,background:"#D8CCBE"}}/>
-            </>
-          ) : (
-            <div style={{
-              width:30,height:30,background:"#1C1510",borderRadius:"50%",
-              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
-            }}>
-              <span style={{color:"#C8A96E",fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontWeight:500}}>C</span>
-            </div>
-          )}
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",minWidth:0}}>
           <div style={{
-            fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:400,
-            color:"#1C1510",letterSpacing:"0.08em",textTransform:"uppercase",
+            width:30,height:30,background:"#1C1510",borderRadius:"50%",
+            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
           }}>
-            Commandes Clients B2B
+            <span style={{color:"#C8A96E",fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontWeight:500}}>C</span>
           </div>
+          <div style={{
+            fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:400,
+            color:"#1C1510",letterSpacing:"0.06em",textTransform:"uppercase",
+          }}>Commandes B2B</div>
+
+          {/* Sélecteur magasin (si l'utilisateur a accès à plusieurs) */}
+          {userMagasins.length > 1 && (
+            <select value={activeMagasin || ""}
+              onChange={e=>setActiveMagasin(e.target.value || null)}
+              style={{
+                fontSize:11,padding:"5px 10px",border:"1px solid #C8A96E",
+                borderRadius:8,background:"#FFF8EB",color:"#1C1510",
+                fontFamily:"'DM Sans',sans-serif",fontWeight:600,cursor:"pointer",
+                letterSpacing:"0.04em",
+              }}>
+              <option value="">🏪 Tous magasins</option>
+              {userMagasins.map(m => (
+                <option key={m} value={m}>{MAGASINS[m]?.nom || m}</option>
+              ))}
+            </select>
+          )}
+          {userMagasins.length === 1 && (
+            <span style={{
+              fontSize:11,padding:"4px 10px",background:"#FFF8EB",border:"1px solid #C8A96E",
+              borderRadius:8,color:"#7A5A2A",fontFamily:"'DM Sans',sans-serif",fontWeight:600,
+              letterSpacing:"0.04em",
+            }}>{MAGASINS[userMagasins[0]]?.nom || userMagasins[0]}</span>
+          )}
+
           <span style={{
-            fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#A09080",
-            background:"#EDE4D5",padding:"2px 9px",borderRadius:20,
+            fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#A09080",
+            background:"#EDE4D5",padding:"2px 8px",borderRadius:20,
           }}>{filtered.length} / {data.length}</span>
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {backupAvailable && (
             <button onClick={exportBackup} className="pulse" style={{
               background:"#FFF8EB",border:"1px solid #C8A96E",borderRadius:8,
-              padding:"6px 14px",fontSize:11,cursor:"pointer",
+              padding:"6px 11px",fontSize:11,cursor:"pointer",
               fontFamily:"'DM Sans',sans-serif",color:"#7A5A2A",
-              display:"flex",alignItems:"center",gap:6,fontWeight:600,
+              display:"flex",alignItems:"center",gap:5,fontWeight:600,
             }} title={`Sauvegarde Excel quotidienne — ${todayDayName}`}>
-              💾 Sauvegarde du jour
+              <span style={{fontSize:14}}>💾</span>
+              <span className="hide-on-mobile">Sauvegarde</span>
             </button>
           )}
-          <button onClick={()=>setShowSettings(true)} title="Gérer les marques et conseillers" style={{
+          <button onClick={()=>setShowSettings(true)} title="Paramètres" style={{
             background:"#F5F0E8",border:"1px solid #DDD4C8",borderRadius:10,
-            padding:"7px 12px",fontSize:18,cursor:"pointer",color:"#5A4030",
+            padding:"7px 11px",fontSize:18,cursor:"pointer",color:"#5A4030",
             lineHeight:1,minHeight:36,display:"flex",alignItems:"center",justifyContent:"center",
           }}>⚙</button>
-          <button onClick={openNew} style={{
-            background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
-            padding:"7px 16px",fontSize:12,cursor:"pointer",
-            fontFamily:"'DM Sans',sans-serif",letterSpacing:"0.06em",
-            display:"flex",alignItems:"center",gap:6,
-          }}><span style={{fontSize:14}}>+</span> Nouvelle commande</button>
+          <button onClick={openNew} title="Nouvelle commande" style={{
+            background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:10,
+            padding:"8px 12px",fontSize:13,cursor:"pointer",
+            fontFamily:"'DM Sans',sans-serif",letterSpacing:"0.04em",
+            display:"flex",alignItems:"center",gap:6,fontWeight:600,minHeight:36,
+          }}>
+            <span style={{fontSize:18,lineHeight:0.8,fontWeight:300}}>+</span>
+            <span className="hide-on-mobile">Nouvelle</span>
+          </button>
+          <button onClick={onSignOut} title={profile?.display_name || profile?.email} style={{
+            background:"#FFF",border:"1px solid #DDD4C8",borderRadius:10,
+            padding:"6px 10px",fontSize:14,cursor:"pointer",color:"#8A7A6A",
+            lineHeight:1,minHeight:36,display:"flex",alignItems:"center",justifyContent:"center",
+          }}>⎋</button>
         </div>
       </div>
 
@@ -709,9 +879,35 @@ export default function CommandesB2B({onBack}) {
             display:"flex",alignItems:"center",gap:8,
           }}>
             <span>♻️</span>
-            <span><b>{archiveCount}</b> commande(s) archivée(s) automatiquement (purge des +60 jours hors statut commandé, et des produits encaissés +15 jours).</span>
+            <span><b>{archiveCount}</b> commande(s) traitée(s) automatiquement (archivage des encaissés +6 jours, et suppression des archives +5 jours).</span>
           </div>
         )}
+
+        {/* ── ONGLETS : Actives / Archivées ─────────────────────────────── */}
+        <div style={{
+          display:"flex",gap:4,marginBottom:18,
+          background:"#F5F0E8",borderRadius:10,padding:4,
+          width:"fit-content",
+        }}>
+          {[
+            {key:false, label:"📋 Actives", count: data.filter(r => !r.archivedAt && userMagasins.includes(r.magasin) && (!activeMagasin || r.magasin===activeMagasin)).length},
+            {key:true,  label:"📦 Archivées", count: data.filter(r => r.archivedAt && userMagasins.includes(r.magasin) && (!activeMagasin || r.magasin===activeMagasin)).length},
+          ].map(t => (
+            <button key={String(t.key)} onClick={()=>setShowArchive(t.key)} style={{
+              background: showArchive===t.key ? "#1C1510" : "transparent",
+              color: showArchive===t.key ? "#E8DED0" : "#5A4030",
+              border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,
+              fontFamily:"'DM Sans',sans-serif",fontWeight:600,cursor:"pointer",
+              display:"flex",alignItems:"center",gap:6,letterSpacing:"0.04em",
+            }}>
+              {t.label}
+              <span style={{
+                background: showArchive===t.key ? "rgba(232,222,208,0.2)" : "#FFF",
+                padding:"1px 8px",borderRadius:10,fontSize:10,fontWeight:700,
+              }}>{t.count}</span>
+            </button>
+          ))}
+        </div>
 
         {/* ── STATS ROW ──────────────────────────────────────────────── */}
         <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
@@ -914,14 +1110,18 @@ export default function CommandesB2B({onBack}) {
                       <td style={{...TD_STYLE,whiteSpace:"nowrap",padding:"8px 10px"}} onClick={e=>e.stopPropagation()}>
                         <div style={{display:"inline-flex",gap:6,alignItems:"center"}}>
                           {row.marque && (
-                            <button onClick={()=>openOrderUrl(row.marque)}
-                              title={brandUrls[row.marque]?.url ? `Commander sur ${brandUrls[row.marque].url}` : "URL B2B à renseigner dans les paramètres"}
+                            <button onClick={()=>openOrderUrl(row)}
+                              title={brandUrls[row.marque]?.url
+                                ? `Commander sur ${brandUrls[row.marque].url}`
+                                : (brandUrls[row.marque]?.email
+                                    ? `Envoyer un mail à ${brandUrls[row.marque].email}`
+                                    : "Renseigner URL ou e-mail dans ⚙ Paramètres")}
                               style={{
                                 fontSize:12,padding:"6px 12px",
-                                background: brandUrls[row.marque]?.url ? "#1C1510" : "#F0EBE3",
-                                border: brandUrls[row.marque]?.url ? "1px solid #1C1510" : "1px solid #DDD4C8",
+                                background: (brandUrls[row.marque]?.url || brandUrls[row.marque]?.email) ? "#1C1510" : "#F0EBE3",
+                                border: (brandUrls[row.marque]?.url || brandUrls[row.marque]?.email) ? "1px solid #1C1510" : "1px solid #DDD4C8",
                                 borderRadius:8,cursor:"pointer",
-                                color: brandUrls[row.marque]?.url ? "#E8DED0" : "#9A8A7A",
+                                color: (brandUrls[row.marque]?.url || brandUrls[row.marque]?.email) ? "#E8DED0" : "#9A8A7A",
                                 fontFamily:"'DM Sans',sans-serif",fontWeight:500,
                                 display:"inline-flex",alignItems:"center",gap:5,
                               }}>🛒 <span>Commander</span></button>
@@ -1161,30 +1361,45 @@ export default function CommandesB2B({onBack}) {
               </FormField>
             </div>
 
-            {/* Si pas de date "de côté" : option Message Vocal ce jour */}
-            {!ticketRow.deCoteJusquau && (
+            {/* 3 cases à cocher contact client (sauvegardées avec la commande) */}
+            <div style={{
+              background:"#F0F5FB",border:"1px solid #D6E4F0",borderRadius:10,
+              padding:"12px 14px",marginBottom:18,
+            }}>
               <div style={{
-                background:"#F0F5FB",border:"1px solid #D6E4F0",borderRadius:10,
-                padding:"12px 14px",marginBottom:18,
-              }}>
-                <label style={{
-                  display:"flex",alignItems:"center",gap:10,cursor:"pointer",
-                  fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#1B5E9B",fontWeight:600,
-                }}>
-                  <input type="checkbox"
-                    checked={!!ticketRow.messageVocal}
-                    onChange={e=>setTicketRow(r=>({...r, messageVocal: e.target.checked}))}
-                    style={{width:18,height:18,accentColor:"#1B5E9B",cursor:"pointer"}}/>
-                  📞 Message vocal ce jour
-                </label>
-                {ticketRow.messageVocal && (
-                  <div style={{marginTop:8,paddingLeft:28,fontSize:11,color:"#5C7AA0",fontFamily:"'DM Sans',sans-serif"}}>
-                    Ticket imprimé avec la date du jour ({fmtDateFr(fmtDate(new Date()))}) ·
-                    relance client à partir du <b>{fmtDateFr(fmtDate(addDays(new Date(),5)))}</b>.
-                  </div>
-                )}
+                fontSize:10,letterSpacing:"0.12em",color:"#1B5E9B",
+                fontWeight:700,marginBottom:8,textTransform:"uppercase",
+              }}>Contact client</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:14}}>
+                {[
+                  {key:"msgVocal",    label:"📞 Message vocal",   color:"#5C7AA0"},
+                  {key:"msgWhatsapp", label:"💬 Message WhatsApp", color:"#1FA855"},
+                  {key:"mailEnvoye",  label:"✉️ Mail envoyé",     color:"#A0620A"},
+                ].map(c => (
+                  <label key={c.key} style={{
+                    display:"flex",alignItems:"center",gap:8,cursor:"pointer",
+                    fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#1C1510",
+                    background:"#FFF",border:"1px solid #D6E4F0",borderRadius:8,
+                    padding:"6px 12px",
+                  }}>
+                    <input type="checkbox" checked={!!ticketRow[c.key]}
+                      onChange={e=>{
+                        const v = e.target.checked;
+                        setTicketRow(r=>({...r, [c.key]: v}));
+                        updateRow(ticketRow.id, { [c.key]: v });
+                      }}
+                      style={{width:16,height:16,accentColor:c.color,cursor:"pointer"}}/>
+                    {c.label}
+                  </label>
+                ))}
               </div>
-            )}
+              {!ticketRow.deCoteJusquau && ticketRow.msgVocal && (
+                <div style={{marginTop:10,fontSize:11,color:"#5C7AA0",fontFamily:"'DM Sans',sans-serif"}}>
+                  Aucune date « de côté » → le ticket imprimera <b>Message vocal du {fmtDateFr(fmtDate(new Date()))}</b>
+                  et indiquera la relance au <b>{fmtDateFr(fmtDate(addDays(new Date(),5)))}</b>.
+                </div>
+              )}
+            </div>
             <FormField label="Quel article reste de côté ?">
               <textarea value={ticketRow.articleCote||""}
                 onChange={e=>setTicketRow(r=>({...r,articleCote: upperCaseFr(e.target.value)}))}
@@ -1200,66 +1415,68 @@ export default function CommandesB2B({onBack}) {
 
             <div className="ticket-printable">
               <div className="ticket-paper">
-                {/* Logo CLOANE */}
-                <div style={{textAlign:"center",paddingBottom:8}}>
-                  <img src={CLOANE_LOGO} alt="CLOANE"
-                    style={{width:"75%",maxWidth:200,display:"block",margin:"0 auto"}}/>
+                {/* Nom du magasin en grand et gras (à la place du logo) */}
+                <div style={{textAlign:"center",paddingBottom:6,paddingTop:2}}>
+                  <div style={{
+                    fontSize:18,fontWeight:900,letterSpacing:"0.12em",
+                    color:"#1C1510",lineHeight:1.1,
+                  }}>{magasinNom(ticketRow.magasin || activeMagasin || "SQUARE")}</div>
                 </div>
-                <div style={{textAlign:"center",fontSize:13,letterSpacing:"0.16em",borderTop:"2px dashed #1C1510",borderBottom:"2px dashed #1C1510",padding:"8px 0",margin:"4px 0 12px"}}>
-                  <b style={{fontWeight:900,fontSize:15}}>COMMANDE CLIENT</b>
+                <div style={{textAlign:"center",fontSize:12,letterSpacing:"0.16em",borderTop:"2px dashed #1C1510",borderBottom:"2px dashed #1C1510",padding:"6px 0",margin:"6px 0 12px"}}>
+                  <b style={{fontWeight:900,fontSize:13}}>COMMANDE CLIENT</b>
                 </div>
 
                 {/* Identité client — gros et gras */}
-                <div style={{textAlign:"center",fontSize:16,lineHeight:1.6,fontWeight:900,marginBottom:6}}>
+                <div style={{textAlign:"center",fontSize:15,lineHeight:1.4,fontWeight:900,marginBottom:4}}>
                   {(ticketRow.nom||"").toUpperCase()} {ticketRow.prenom||""}
                 </div>
-                <div style={{textAlign:"center",fontSize:14,fontWeight:700,marginBottom:14}}>
+                <div style={{textAlign:"center",fontSize:13,fontWeight:800,marginBottom:12}}>
                   {ticketRow.tel ? fmtPhone(ticketRow.tel) : "—"}
                 </div>
 
                 {/* Bloc DE CÔTÉ JUSQU'AU ou MESSAGE VOCAL */}
                 {ticketRow.deCoteJusquau ? (
-                  <div style={{margin:"14px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"12px 0",textAlign:"center"}}>
-                    <div style={{fontSize:11,marginBottom:6,letterSpacing:"0.14em",fontWeight:700}}>DE CÔTÉ JUSQU'AU</div>
-                    <div style={{fontSize:22,fontWeight:900,letterSpacing:"0.08em"}}>
+                  <div style={{margin:"12px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"10px 0",textAlign:"center"}}>
+                    <div style={{fontSize:10,marginBottom:4,letterSpacing:"0.12em",fontWeight:800}}>DE CÔTÉ JUSQU'AU</div>
+                    <div style={{fontSize:19,fontWeight:900,letterSpacing:"0.06em"}}>
                       {fmtDateFr(ticketRow.deCoteJusquau)}
                     </div>
                   </div>
-                ) : ticketRow.messageVocal ? (
-                  <div style={{margin:"14px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"12px 0",textAlign:"center"}}>
-                    <div style={{fontSize:11,marginBottom:6,letterSpacing:"0.14em",fontWeight:700}}>MESSAGE VOCAL CE JOUR</div>
-                    <div style={{fontSize:18,fontWeight:900,letterSpacing:"0.06em"}}>
+                ) : ticketRow.msgVocal ? (
+                  <div style={{margin:"12px 0",borderTop:"1px dashed #1C1510",borderBottom:"1px dashed #1C1510",padding:"10px 0",textAlign:"center"}}>
+                    <div style={{fontSize:10,marginBottom:4,letterSpacing:"0.12em",fontWeight:800}}>MESSAGE VOCAL CE JOUR</div>
+                    <div style={{fontSize:16,fontWeight:900,letterSpacing:"0.06em"}}>
                       {fmtDateFr(fmtDate(new Date()))}
                     </div>
                   </div>
                 ) : null}
 
                 {/* Conseiller */}
-                <div style={{textAlign:"center",margin:"10px 0",fontSize:12}}>
-                  <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:3,fontWeight:700}}>CONSEILLER</div>
-                  <b style={{fontSize:14,fontWeight:900}}>{ticketRow.vendeur||"—"}</b>
+                <div style={{textAlign:"center",margin:"10px 0",fontSize:11}}>
+                  <div style={{fontSize:9,letterSpacing:"0.12em",marginBottom:2,fontWeight:800}}>CONSEILLER</div>
+                  <b style={{fontSize:13,fontWeight:900}}>{ticketRow.vendeur||"—"}</b>
                 </div>
 
                 {/* Article réservé */}
                 {ticketRow.articleCote && (
-                  <div style={{marginTop:14,paddingTop:10,borderTop:"1px dashed #1C1510",fontSize:13,whiteSpace:"pre-line",textAlign:"center",fontWeight:700,lineHeight:1.55}}>
-                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:6,fontWeight:700}}>ARTICLE RÉSERVÉ</div>
+                  <div style={{marginTop:12,paddingTop:8,borderTop:"1px dashed #1C1510",fontSize:12,whiteSpace:"pre-line",textAlign:"center",fontWeight:800,lineHeight:1.5}}>
+                    <div style={{fontSize:9,letterSpacing:"0.12em",marginBottom:4,fontWeight:800}}>ARTICLE RÉSERVÉ</div>
                     {ticketRow.articleCote}
                   </div>
                 )}
 
                 {/* Pied : REMETTRE EN RAYON LE… ou RELANCER LE CLIENT À PARTIR DU… */}
                 {ticketRow.deCoteJusquau ? (
-                  <div style={{textAlign:"center",marginTop:16,paddingTop:10,borderTop:"2px dashed #1C1510",fontSize:12}}>
-                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:5,fontWeight:700}}>REMETTRE EN RAYON LE</div>
-                    <div style={{fontSize:17,fontWeight:900,letterSpacing:"0.06em"}}>
+                  <div style={{textAlign:"center",marginTop:14,paddingTop:8,borderTop:"2px dashed #1C1510",fontSize:11}}>
+                    <div style={{fontSize:9,letterSpacing:"0.12em",marginBottom:3,fontWeight:800}}>REMETTRE EN RAYON LE</div>
+                    <div style={{fontSize:15,fontWeight:900,letterSpacing:"0.06em"}}>
                       {fmtDateFr(fmtDate(addDays(parseDate(ticketRow.deCoteJusquau) || new Date(), 7)))}
                     </div>
                   </div>
-                ) : ticketRow.messageVocal ? (
-                  <div style={{textAlign:"center",marginTop:16,paddingTop:10,borderTop:"2px dashed #1C1510",fontSize:12}}>
-                    <div style={{fontSize:10,letterSpacing:"0.14em",marginBottom:5,fontWeight:700}}>RELANCER LE CLIENT À PARTIR DU</div>
-                    <div style={{fontSize:17,fontWeight:900,letterSpacing:"0.06em"}}>
+                ) : ticketRow.msgVocal ? (
+                  <div style={{textAlign:"center",marginTop:14,paddingTop:8,borderTop:"2px dashed #1C1510",fontSize:11}}>
+                    <div style={{fontSize:9,letterSpacing:"0.12em",marginBottom:3,fontWeight:800}}>RELANCER LE CLIENT À PARTIR DU</div>
+                    <div style={{fontSize:15,fontWeight:900,letterSpacing:"0.06em"}}>
                       {fmtDateFr(fmtDate(addDays(new Date(), 5)))}
                     </div>
                   </div>
@@ -1445,6 +1662,61 @@ export default function CommandesB2B({onBack}) {
         </div>
       )}
 
+      {/* ── RUPTURE STOCK : modal pour prévenir le client ─────────────── */}
+      {ruptureRow && (
+        <Modal onClose={()=>setRuptureRow(null)} title="Rupture de stock — prévenir le client" maxWidth={520}>
+          <div style={{
+            background:"#FCEAEA",border:"1px solid #F0C8C8",borderRadius:10,
+            padding:"14px 16px",marginBottom:16,
+          }}>
+            <div style={{fontSize:13,color:"#7A2020",fontWeight:600,marginBottom:8}}>
+              ⚠️ Article en rupture — informer le client
+            </div>
+            <div style={{fontSize:12,color:"#5A4030",lineHeight:1.5,fontFamily:"'DM Sans',sans-serif"}}>
+              Cette commande passe en <b>Rupture Stock</b>. Choisissez un moyen pour prévenir
+              <b> {(ruptureRow.nom||"").toUpperCase()} {ruptureRow.prenom||""}</b> avec un message d'excuses prérempli
+              l'invitant à recontacter le magasin plus tard dans la saison.
+            </div>
+          </div>
+
+          {/* Aperçu du message */}
+          <div style={{
+            background:"#FFFCF8",border:"1px solid #EDE4D5",borderRadius:10,
+            padding:"14px 16px",marginBottom:18,fontSize:12,
+            fontFamily:"'DM Sans',sans-serif",color:"#1C1510",
+            whiteSpace:"pre-line",lineHeight:1.55,
+          }}>
+            <div style={{fontSize:9,letterSpacing:"0.12em",color:"#8A7A6A",fontWeight:700,marginBottom:8,textTransform:"uppercase"}}>
+              Aperçu du message
+            </div>
+            {buildRuptureMessage(ruptureRow, ruptureRow.magasin)}
+          </div>
+
+          {/* Boutons de contact */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+            <button onClick={()=>sendRuptureWhatsApp(ruptureRow)} style={contactBtnInlineStyle("#1FA855")}>
+              💬 WhatsApp
+            </button>
+            <button onClick={()=>sendRuptureSMS(ruptureRow)} style={contactBtnInlineStyle("#5C7AA0")}>
+              📩 SMS
+            </button>
+            <button onClick={()=>sendRuptureMail(ruptureRow)}
+              style={{...contactBtnInlineStyle("#A0620A"), opacity: ruptureRow.email?1:0.5}}
+              disabled={!ruptureRow.email}>
+              ✉️ E-mail{!ruptureRow.email && " (non renseigné)"}
+            </button>
+          </div>
+
+          <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"flex-end"}}>
+            <button onClick={()=>setRuptureRow(null)} style={{
+              padding:"9px 18px",background:"#F5F0E8",border:"1px solid #DDD4C8",
+              borderRadius:8,fontSize:12,cursor:"pointer",color:"#5A4030",
+              fontFamily:"'DM Sans',sans-serif",
+            }}>Fermer</button>
+          </div>
+        </Modal>
+      )}
+
       {/* ── STATUS POPOVER (clic sur le statut d'une ligne) ───────────── */}
       {statusMenu && (
         <div onClick={()=>setStatusMenu(null)} style={{
@@ -1482,6 +1754,10 @@ export default function CommandesB2B({onBack}) {
                           deCoteJusquau: r.deCoteJusquau || fmtDate(addDays(new Date(), 7)),
                         }), 150);
                       }
+                      if (s.val === "Rupture Stock") {
+                        const r = statusMenu.row;
+                        setTimeout(()=>setRuptureRow({...r, etat: s.val, dateValid: today}), 150);
+                      }
                     }
                     setStatusMenu(null);
                   }}
@@ -1514,6 +1790,15 @@ function contactBtnStyle(accent) {
     borderBottom:"1px solid #F4EFE6",cursor:"pointer",
     fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#2C1E0F",
     textAlign:"left",borderLeft:`3px solid ${accent}`,
+  };
+}
+function contactBtnInlineStyle(accent) {
+  return {
+    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+    padding:"12px 16px",background:"#FFF",
+    border:`1.5px solid ${accent}`,cursor:"pointer",
+    fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,
+    color:accent,borderRadius:9,
   };
 }
 
