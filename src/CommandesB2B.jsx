@@ -7,16 +7,31 @@ import { MAGASINS, MAGASIN_CODES, magasinNom, magasinTel } from "./magasins";
 //   CONSTANTES — listes officielles (feuille 2 du tableau source)
 // ════════════════════════════════════════════════════════════════════════════
 
-const ETATS = [
-  { val: "A commander",           label: "À commander",       color: "#A0620A", bg: "#FFF3DE" },
-  { val: "Rupture Stock",         label: "Rupture stock",     color: "#9B2020", bg: "#FCEAEA" },
-  { val: "DEPOT CLOANE",          label: "Dépôt CLOANE",      color: "#7A5A2A", bg: "#F5EBD8" },
-  { val: "En Panier B2B",         label: "En panier B2B",     color: "#5C7AA0", bg: "#E5EFF7" },
-  { val: "Commande validée",      label: "Commande validée",  color: "#2A7A3B", bg: "#E4F5E8" },
-  { val: "Commande réceptionnée", label: "Cde réceptionnée",  color: "#5A2DA0", bg: "#F0E9FC" },
-  { val: "Client prévenu",        label: "Client prévenu",    color: "#1B5E9B", bg: "#E3F0FC" },
-  { val: "Produit encaissé",      label: "Produit encaissé",  color: "#1A6648", bg: "#DFF5EC" },
+// Fallback (utilisé en cas d'échec de chargement Supabase ou au tout début).
+// Les vraies couleurs/noms sont chargés depuis Supabase et modifiables par les managers.
+const ETATS_FALLBACK = [
+  { val: "A commander",           label: "À commander",       color: "#E63946" },
+  { val: "Rupture Stock",         label: "Rupture stock",     color: "#9B59B6" },
+  { val: "DEPOT CLOANE",          label: "Dépôt CLOANE",      color: "#EC7BAA" },
+  { val: "En Panier B2B",         label: "En panier B2B",     color: "#F39C12" },
+  { val: "Commande validée",      label: "Commande validée",  color: "#8FCB87" },
+  { val: "Commande réceptionnée", label: "Cde réceptionnée",  color: "#F1C40F" },
+  { val: "Client prévenu",        label: "Client prévenu",    color: "#3498DB" },
+  { val: "Produit encaissé",      label: "Produit encaissé",  color: "#2D7A4D" },
 ];
+
+// Génère une couleur de fond pastel à partir d'une couleur hex principale
+function lightenColor(hex, mix = 0.86) {
+  if (!hex || typeof hex !== "string") return "#F5F0E8";
+  const c = hex.replace("#", "");
+  if (c.length !== 6) return "#F5F0E8";
+  const r = parseInt(c.slice(0,2),16);
+  const g = parseInt(c.slice(2,4),16);
+  const b = parseInt(c.slice(4,6),16);
+  const m = (v) => Math.round(v + (255 - v) * mix);
+  const hh = (n) => n.toString(16).padStart(2,"0");
+  return "#" + hh(m(r)) + hh(m(g)) + hh(m(b));
+}
 
 // Statuts "commande passée" → exemptés de la règle de purge à 60 jours
 const STATUTS_COMMANDE = ["Commande validée", "Commande réceptionnée"];
@@ -175,15 +190,18 @@ const EMPTY_FORM = {
 
 // ── Helper components ──────────────────────────────────────────────────────
 
-function badgeEtat(etat) {
-  const s = ETATS.find(x => x.val === etat);
+function badgeEtat(etat, statuts) {
+  const s = (statuts || ETATS_FALLBACK).find(x => (x.val || x.nom) === etat);
   if (!s) return etat ? <span style={{fontSize:10,color:"#A09080"}}>{etat}</span> : null;
+  const color = s.color || s.couleur;
+  const bg = s.bg || lightenColor(color);
+  const label = s.label || s.nom;
   return (
     <span style={{
       display:"inline-block",padding:"3px 9px",borderRadius:20,
       fontSize:10,fontWeight:600,fontFamily:"'DM Sans',sans-serif",
-      color:s.color,background:s.bg,whiteSpace:"nowrap",letterSpacing:"0.02em",
-    }}>{s.label}</span>
+      color:color,background:bg,whiteSpace:"nowrap",letterSpacing:"0.02em",
+    }}>{label}</span>
   );
 }
 
@@ -236,7 +254,21 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [brands, setBrands] = useState([...DEFAULT_BRANDS]);
-  const [vendors, setVendors] = useState([...DEFAULT_VENDORS]);
+  const [vendeursAll, setVendeursAll] = useState([]); // [{id,nom,magasins:[]}]
+  const [statutsAll, setStatutsAll] = useState([]); // [{id,nom,couleur,ordre}]
+
+  // ETATS normalisés (compat avec l'ancien format {val,label,color,bg})
+  const ETATS = useMemo(() => {
+    const src = statutsAll.length ? statutsAll : ETATS_FALLBACK;
+    return src.map(s => ({
+      val: s.val || s.nom,
+      label: s.label || s.nom,
+      color: s.color || s.couleur || "#8A7A6A",
+      bg: s.bg || lightenColor(s.color || s.couleur || "#8A7A6A"),
+      id: s.id, // utile pour les paramètres
+      ordre: s.ordre,
+    }));
+  }, [statutsAll]);
   // Infos B2B par fournisseur : URL site B2B, téléphone et e-mail du contact
   const [brandUrls, setBrandUrls] = useState({
     "CARHARTT":       { url: "https://b2b.carhartt-wip.com", tel: "", email: "" },
@@ -334,8 +366,27 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
         setLoading(false);
         setTimeout(() => setLoaded(true), 60);
       }
+      // Charger la liste des vendeurs depuis Supabase
+      try {
+        const v = await db.fetchVendeurs();
+        setVendeursAll(v);
+      } catch (e) { console.error("fetchVendeurs", e); }
+      // Charger la liste des statuts depuis Supabase
+      try {
+        const s = await db.fetchStatuts();
+        setStatutsAll(s);
+      } catch (e) { console.error("fetchStatuts", e); }
     })();
   }, []);
+
+  // Liste des noms de vendeurs visibles selon le magasin actif
+  // (si "Tous" : on affiche tous les vendeurs des magasins autorisés)
+  const visibleVendors = useMemo(() => {
+    const filterMagasins = activeMagasin ? [activeMagasin] : userMagasins;
+    return vendeursAll
+      .filter(v => v.magasins.some(m => filterMagasins.includes(m)))
+      .map(v => v.nom);
+  }, [vendeursAll, activeMagasin, userMagasins]);
 
   // ── Filtering & sorting ──
   const filtered = useMemo(() => {
@@ -379,13 +430,27 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
     });
   }, [data, filters, search, sortCol, sortDir]);
 
+  // Données filtrées par magasin et vue archive (avant filtres etat/marque/vendeur)
+  // utilisées pour calculer les stats et le compteur des onglets de manière cohérente
+  const magasinFiltered = useMemo(() => {
+    let d = data;
+    if (activeMagasin) d = d.filter(r => r.magasin === activeMagasin);
+    else d = d.filter(r => userMagasins.includes(r.magasin));
+    return d;
+  }, [data, activeMagasin, userMagasins]);
+
+  const activesData = useMemo(() => magasinFiltered.filter(r => !r.archivedAt), [magasinFiltered]);
+  const archivedData = useMemo(() => magasinFiltered.filter(r => !!r.archivedAt), [magasinFiltered]);
+
+  // Stats reflètent la vue active (magasin + onglet)
+  const statsBase = showArchive ? archivedData : activesData;
   const stats = useMemo(() => ({
-    total: data.length,
-    aCommander: data.filter(r => r.etat === "A commander").length,
-    clientPrevenu: data.filter(r => r.etat === "Client prévenu").length,
-    rupture: data.filter(r => r.etat === "Rupture Stock").length,
-    encaisse: data.filter(r => r.etat === "Produit encaissé").length,
-  }), [data]);
+    total: statsBase.length,
+    aCommander: statsBase.filter(r => r.etat === "A commander").length,
+    clientPrevenu: statsBase.filter(r => r.etat === "Client prévenu").length,
+    rupture: statsBase.filter(r => r.etat === "Rupture Stock").length,
+    encaisse: statsBase.filter(r => r.etat === "Produit encaissé").length,
+  }), [statsBase]);
 
   const todayDayName = useMemo(() => dayName(), []);
   const backupAvailable = todayDayName !== "dimanche" && lastBackupDay !== todayDayName;
@@ -661,15 +726,113 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
     const body = encodeURIComponent(buildRuptureMessage(row, row.magasin));
     window.location.href = `sms:${tel}?&body=${body}`;
   }
-  function addVendor() {
-    const name = newVendorInput.trim().toUpperCase();
-    if (!name || vendors.includes(name)) return;
-    setVendors(v => [...v, name].sort());
-    setNewVendorInput("");
+  async function addVendor() {
+    const name = upperCaseFr(newVendorInput.trim());
+    if (!name) return;
+    if (vendeursAll.some(v => v.nom === name)) {
+      alert(`Le conseiller "${name}" existe déjà.`);
+      return;
+    }
+    // Par défaut : affecté au magasin actif (ou au premier magasin du profil)
+    const magasins = activeMagasin ? [activeMagasin] : (userMagasins.length === 1 ? [userMagasins[0]] : []);
+    try {
+      const created = await db.insertVendeur(name, magasins);
+      setVendeursAll(v => [...v, created].sort((a,b) => a.nom.localeCompare(b.nom)));
+      setNewVendorInput("");
+    } catch (e) {
+      console.error(e);
+      alert("Impossible d'ajouter ce conseiller. Vérifiez vos droits.");
+    }
   }
-  function removeVendor(name) {
+  async function removeVendeur(id, name) {
     if (!confirm(`Supprimer le conseiller "${name}" de la liste ?`)) return;
-    setVendors(v => v.filter(x => x !== name));
+    setVendeursAll(v => v.filter(x => x.id !== id));
+    try { await db.deleteVendeur(id); }
+    catch (e) {
+      console.error(e);
+      alert("Impossible de supprimer ce conseiller. Vérifiez vos droits.");
+      // Recharger pour resync
+      db.fetchVendeurs().then(setVendeursAll).catch(()=>{});
+    }
+  }
+  async function toggleVendeurMagasin(vendeur, magasinCode) {
+    const newMagasins = vendeur.magasins.includes(magasinCode)
+      ? vendeur.magasins.filter(m => m !== magasinCode)
+      : [...vendeur.magasins, magasinCode];
+    setVendeursAll(arr => arr.map(v => v.id === vendeur.id ? {...v, magasins: newMagasins} : v));
+    try { await db.updateVendeurMagasins(vendeur.id, newMagasins); }
+    catch (e) {
+      console.error(e);
+      alert("Impossible de modifier l'affectation. Vérifiez vos droits.");
+      db.fetchVendeurs().then(setVendeursAll).catch(()=>{});
+    }
+  }
+
+  // ── Statuts CRUD ──
+  async function updateStatutColor(id, couleur) {
+    setStatutsAll(arr => arr.map(s => s.id === id ? {...s, couleur} : s));
+    try { await db.updateStatut(id, { couleur }); }
+    catch (e) {
+      console.error(e);
+      alert("Impossible de modifier la couleur. Vérifiez vos droits.");
+      db.fetchStatuts().then(setStatutsAll).catch(()=>{});
+    }
+  }
+  // Saisie en cours (édition contrôlée locale)
+  function renameStatutInline(id, oldNom, newNom) {
+    setStatutsAll(arr => arr.map(s => s.id === id ? {...s, nom: newNom} : s));
+  }
+  // Validation du renommage (au blur) : cascade en base
+  async function commitStatutRename(id, oldNom, newNom) {
+    const trimmed = (newNom || "").trim();
+    if (!trimmed || trimmed === oldNom) {
+      // Resync si vide
+      if (!trimmed) {
+        setStatutsAll(arr => arr.map(s => s.id === id ? {...s, nom: oldNom} : s));
+      }
+      return;
+    }
+    try {
+      await db.renameStatut(oldNom, trimmed);
+      // Reflet local : les commandes utilisant l'ancien nom passent au nouveau
+      setData(arr => arr.map(r => r.etat === oldNom ? {...r, etat: trimmed} : r));
+    } catch (e) {
+      console.error(e);
+      alert("Impossible de renommer ce statut. Vérifiez vos droits.");
+      setStatutsAll(arr => arr.map(s => s.id === id ? {...s, nom: oldNom} : s));
+    }
+  }
+  async function removeStatut(s) {
+    const used = data.filter(r => r.etat === s.nom).length;
+    if (used > 0) {
+      alert(`Impossible de supprimer « ${s.nom} » : ce statut est utilisé par ${used} commande(s).`);
+      return;
+    }
+    if (!confirm(`Supprimer définitivement le statut « ${s.nom} » ?`)) return;
+    setStatutsAll(arr => arr.filter(x => x.id !== s.id));
+    try { await db.deleteStatut(s.id); }
+    catch (e) {
+      console.error(e);
+      alert("Impossible de supprimer ce statut. Vérifiez vos droits.");
+      db.fetchStatuts().then(setStatutsAll).catch(()=>{});
+    }
+  }
+  async function addStatut() {
+    const nom = prompt("Nom du nouveau statut :");
+    if (!nom?.trim()) return;
+    const cleanNom = nom.trim();
+    if (statutsAll.some(s => s.nom === cleanNom)) {
+      alert("Ce statut existe déjà.");
+      return;
+    }
+    const maxOrdre = Math.max(0, ...statutsAll.map(s => s.ordre || 0));
+    try {
+      const created = await db.insertStatut(cleanNom, "#8A7A6A", maxOrdre + 1);
+      setStatutsAll(arr => [...arr, created].sort((a,b) => a.ordre - b.ordre));
+    } catch (e) {
+      console.error(e);
+      alert("Impossible d'ajouter ce statut. Vérifiez vos droits.");
+    }
   }
 
   // ── Daily Excel backup ──
@@ -890,8 +1053,8 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
           width:"fit-content",
         }}>
           {[
-            {key:false, label:"📋 Actives", count: data.filter(r => !r.archivedAt && userMagasins.includes(r.magasin) && (!activeMagasin || r.magasin===activeMagasin)).length},
-            {key:true,  label:"📦 Archivées", count: data.filter(r => r.archivedAt && userMagasins.includes(r.magasin) && (!activeMagasin || r.magasin===activeMagasin)).length},
+            {key:false, label:"📋 Actives", count: activesData.length},
+            {key:true,  label:"📦 Archivées", count: archivedData.length},
           ].map(t => (
             <button key={String(t.key)} onClick={()=>setShowArchive(t.key)} style={{
               background: showArchive===t.key ? "#1C1510" : "transparent",
@@ -912,12 +1075,17 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
         {/* ── STATS ROW ──────────────────────────────────────────────── */}
         <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
           {[
-            {label:"Total",val:stats.total,color:"#8A7A6A",bg:"#F5F0E8",etat:null},
-            {label:"À commander",val:stats.aCommander,color:"#A0620A",bg:"#FFF3DE",etat:"A commander"},
-            {label:"Client prévenu",val:stats.clientPrevenu,color:"#1B5E9B",bg:"#E3F0FC",etat:"Client prévenu"},
-            {label:"Rupture stock",val:stats.rupture,color:"#9B2020",bg:"#FCEAEA",etat:"Rupture Stock"},
-            {label:"Encaissé",val:stats.encaisse,color:"#1A6648",bg:"#DFF5EC",etat:"Produit encaissé"},
-          ].map(s => (
+            {label:"Total",val:stats.total,etat:null},
+            {label:"À commander",val:stats.aCommander,etat:"A commander"},
+            {label:"Client prévenu",val:stats.clientPrevenu,etat:"Client prévenu"},
+            {label:"Rupture stock",val:stats.rupture,etat:"Rupture Stock"},
+            {label:"Encaissé",val:stats.encaisse,etat:"Produit encaissé"},
+          ].map(s => {
+            const meta = s.etat ? ETATS.find(e => e.val === s.etat) : null;
+            const color = meta?.color || "#8A7A6A";
+            const bg = meta?.bg || "#F5F0E8";
+            return ({...s, color, bg});
+          }).map(s => (
             <div key={s.label} onClick={()=>s.etat && setFilters(f => ({...f, etat: f.etat===s.etat?"":s.etat}))}
               style={{
                 background:"#FFF",border:`1px solid ${s.bg}`,
@@ -958,7 +1126,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
           <DropDown options={brands} value={filters.marque}
             onChange={v=>setFilters(f=>({...f,marque:v}))}
             placeholder="Toutes les marques" minWidth={170}/>
-          <DropDown options={vendors} value={filters.vendeur}
+          <DropDown options={visibleVendors} value={filters.vendeur}
             onChange={v=>setFilters(f=>({...f,vendeur:v}))}
             placeholder="Tous les conseillers" minWidth={160}/>
           {hasFilters && (
@@ -1098,7 +1266,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
                             all:"unset",cursor:"pointer",display:"inline-block",
                             padding:0,borderRadius:20,
                           }}>
-                          {badgeEtat(row.etat) || (
+                          {badgeEtat(row.etat, ETATS) || (
                             <span style={{
                               fontSize:10,color:"#8A7A6A",fontStyle:"italic",
                               border:"1px dashed #D8CCBE",borderRadius:20,padding:"2px 10px",
@@ -1252,7 +1420,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
               <FormField label="Conseiller">
                 <select value={form.vendeur||""} onChange={e=>setForm(p=>({...p,vendeur:e.target.value}))} style={inputStyle()}>
                   <option value="">—</option>
-                  {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  {visibleVendors.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </FormField>
               <FormField label="Marque">
@@ -1356,7 +1524,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
                   onChange={e=>setTicketRow(r=>({...r,vendeur:e.target.value}))}
                   style={inputStyle()}>
                   <option value="">—</option>
-                  {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  {visibleVendors.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </FormField>
             </div>
@@ -1506,7 +1674,8 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
             <div style={{display:"flex",borderBottom:"1px solid #EDE4D5",padding:"0 24px"}}>
               {[
                 {key:"brands",label:`Fournisseurs (${brands.length})`},
-                {key:"vendors",label:`Conseillers (${vendors.length})`},
+                {key:"vendors",label:`Conseillers (${vendeursAll.length})`},
+                {key:"statuts",label:`Statuts (${statutsAll.length})`},
               ].map(t => (
                 <button key={t.key} onClick={()=>setSettingsTab(t.key)} style={{
                   all:"unset",cursor:"pointer",padding:"12px 18px",
@@ -1588,35 +1757,145 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
                     })}
                   </div>
                 </>
-              ) : (
+              ) : settingsTab === "vendors" ? (
                 <>
                   <div style={{display:"flex",gap:8,marginBottom:12}}>
                     <input value={newVendorInput} onChange={e=>setNewVendorInput(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&addVendor()}
                       placeholder="Nouveau conseiller (sera mis en majuscules)"
                       style={inputStyle()}/>
-                    <button onClick={addVendor} style={{
-                      background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
-                      padding:"0 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",
+                    <button onClick={addVendor} disabled={!isManager} style={{
+                      background: isManager ? "#1C1510" : "#AAA",
+                      color:"#E8DED0",border:"none",borderRadius:8,
+                      padding:"0 16px",fontSize:12,
+                      cursor: isManager ? "pointer" : "not-allowed",
+                      fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",
                     }}>+ Ajouter</button>
                   </div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {vendors.map(v => (
-                      <span key={v} style={{
-                        display:"inline-flex",alignItems:"center",gap:6,
-                        background:"#F5F0E8",color:"#1C1510",fontSize:11,
-                        fontFamily:"'DM Sans',sans-serif",
-                        padding:"4px 4px 4px 12px",borderRadius:20,
-                        border:"1px solid #E0D8CE",
+                  {!isManager && (
+                    <div style={{
+                      background:"#FFF8EB",border:"1px solid #E8DCC0",borderRadius:8,
+                      padding:"8px 12px",fontSize:11,color:"#7A5A2A",marginBottom:12,
+                      fontFamily:"'DM Sans',sans-serif",
+                    }}>ℹ️ Seuls les managers peuvent modifier la liste des conseillers.</div>
+                  )}
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {vendeursAll.map(v => (
+                      <div key={v.id} style={{
+                        background:"#FAFAF8",border:"1px solid #EDE4D5",borderRadius:10,
+                        padding:"10px 12px",
                       }}>
-                        {v}
-                        <button onClick={()=>removeVendor(v)} style={{
-                          background:"#FDEEEE",border:"none",borderRadius:"50%",
-                          width:18,height:18,cursor:"pointer",color:"#9B2020",fontSize:11,lineHeight:1,
-                        }}>×</button>
-                      </span>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                          <span style={{
+                            fontSize:13,fontFamily:"'DM Sans',sans-serif",fontWeight:700,
+                            color:"#4A2C1A",letterSpacing:"0.04em",
+                          }}>{v.nom}</span>
+                          {isManager && (
+                            <button onClick={()=>removeVendeur(v.id, v.nom)} title="Supprimer" style={{
+                              background:"#FDEEEE",border:"none",borderRadius:"50%",
+                              width:24,height:24,cursor:"pointer",color:"#9B2020",fontSize:14,lineHeight:1,
+                            }}>×</button>
+                          )}
+                        </div>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {MAGASIN_CODES.map(code => {
+                            const checked = v.magasins.includes(code);
+                            return (
+                              <label key={code} style={{
+                                display:"flex",alignItems:"center",gap:5,
+                                background: checked ? "#FFF8EB" : "#FFF",
+                                border: `1px solid ${checked ? "#C8A96E" : "#E0D8CE"}`,
+                                borderRadius:8,padding:"4px 9px",
+                                fontSize:11,fontFamily:"'DM Sans',sans-serif",
+                                color: checked ? "#7A5A2A" : "#8A7A6A",
+                                cursor: isManager ? "pointer" : "default",
+                                fontWeight: checked ? 700 : 500,
+                                opacity: isManager ? 1 : 0.7,
+                              }}>
+                                <input type="checkbox" checked={checked}
+                                  disabled={!isManager}
+                                  onChange={()=>toggleVendeurMagasin(v, code)}
+                                  style={{accentColor:"#C8A96E",cursor:isManager?"pointer":"default"}}/>
+                                {MAGASINS[code]?.nom?.replace("CLOANE ", "") || code}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     ))}
                   </div>
+                </>
+              ) : (
+                /* ── ONGLET STATUTS ── */
+                <>
+                  {!isManager ? (
+                    <div style={{
+                      background:"#FFF8EB",border:"1px solid #E8DCC0",borderRadius:8,
+                      padding:"12px 14px",fontSize:11,color:"#7A5A2A",
+                      fontFamily:"'DM Sans',sans-serif",lineHeight:1.5,
+                    }}>ℹ️ Seuls les managers peuvent ajouter, modifier ou supprimer des statuts.</div>
+                  ) : null}
+
+                  {isManager && (
+                    <div style={{
+                      background:"#F0F5FB",border:"1px solid #D6E4F0",borderRadius:8,
+                      padding:"10px 12px",fontSize:11,color:"#1B5E9B",marginBottom:14,
+                      fontFamily:"'DM Sans',sans-serif",lineHeight:1.5,
+                    }}>
+                      💡 Cliquez sur un nom ou une couleur pour modifier.
+                      Le renommage met à jour <b>toutes</b> les commandes utilisant ce statut.
+                    </div>
+                  )}
+
+                  <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+                    {statutsAll.map((s, idx) => (
+                      <div key={s.id} style={{
+                        background:"#FAFAF8",border:"1px solid #EDE4D5",borderRadius:10,
+                        padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
+                      }}>
+                        {/* Couleur principale + aperçu pastille */}
+                        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+                          <input type="color" value={s.couleur || "#8A7A6A"}
+                            disabled={!isManager}
+                            onChange={e=>updateStatutColor(s.id, e.target.value)}
+                            style={{
+                              width:30,height:30,border:"1px solid #E0D8CE",borderRadius:6,
+                              cursor: isManager ? "pointer" : "default",background:"#FFF",padding:2,
+                            }}/>
+                          <span style={{
+                            display:"inline-block",padding:"3px 10px",borderRadius:20,
+                            fontSize:10,fontWeight:600,fontFamily:"'DM Sans',sans-serif",
+                            color: s.couleur, background: lightenColor(s.couleur),
+                            whiteSpace:"nowrap",flexShrink:0,
+                          }}>{s.nom}</span>
+                          <input value={s.nom}
+                            disabled={!isManager}
+                            onChange={e=>renameStatutInline(s.id, s.nom, e.target.value)}
+                            onBlur={e=>commitStatutRename(s.id, s.nom, e.target.value)}
+                            style={{
+                              flex:1,padding:"6px 9px",fontSize:12,
+                              fontFamily:"'DM Sans',sans-serif",fontWeight:600,
+                              border:"1px solid #E0D8CE",borderRadius:7,
+                              background:"#FFF",color:"#1C1510",minWidth:80,
+                            }}/>
+                        </div>
+                        {isManager && (
+                          <button onClick={()=>removeStatut(s)} title="Supprimer ce statut" style={{
+                            background:"#FDEEEE",border:"none",borderRadius:"50%",
+                            width:24,height:24,cursor:"pointer",color:"#9B2020",fontSize:14,lineHeight:1,flexShrink:0,
+                          }}>×</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {isManager && (
+                    <button onClick={addStatut} style={{
+                      background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
+                      padding:"9px 16px",fontSize:12,cursor:"pointer",
+                      fontFamily:"'DM Sans',sans-serif",fontWeight:600,
+                    }}>+ Ajouter un statut</button>
+                  )}
                 </>
               )}
             </div>

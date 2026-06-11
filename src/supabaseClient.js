@@ -131,3 +131,58 @@ export async function archiveOrders(ids) {
   if (error) throw error;
   return now;
 }
+
+// ── VENDEURS ──────────────────────────────────────────────────────────────
+const VENDEURS_TABLE = "vendeurs";
+
+export async function fetchVendeurs() {
+  const { data, error } = await supabase
+    .from(VENDEURS_TABLE).select("*").order("nom");
+  if (error) throw error;
+  return data || [];
+}
+export async function insertVendeur(nom, magasins) {
+  const { data, error } = await supabase
+    .from(VENDEURS_TABLE).insert({ nom, magasins }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function updateVendeurMagasins(id, magasins) {
+  const { error } = await supabase
+    .from(VENDEURS_TABLE).update({ magasins }).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteVendeur(id) {
+  const { error } = await supabase.from(VENDEURS_TABLE).delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ── STATUTS ───────────────────────────────────────────────────────────────
+const STATUTS_TABLE = "statuts";
+
+export async function fetchStatuts() {
+  const { data, error } = await supabase
+    .from(STATUTS_TABLE).select("*").order("ordre");
+  if (error) throw error;
+  return data || [];
+}
+export async function insertStatut(nom, couleur, ordre) {
+  const { data, error } = await supabase
+    .from(STATUTS_TABLE).insert({ nom, couleur, ordre }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function updateStatut(id, patch) {
+  const { error } = await supabase
+    .from(STATUTS_TABLE).update(patch).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteStatut(id) {
+  const { error } = await supabase.from(STATUTS_TABLE).delete().eq("id", id);
+  if (error) throw error;
+}
+// Renomme un statut + cascade sur toutes les commandes qui l'utilisent
+export async function renameStatut(oldNom, newNom) {
+  const { error } = await supabase.rpc("rename_statut", { old_nom: oldNom, new_nom: newNom });
+  if (error) throw error;
+}
