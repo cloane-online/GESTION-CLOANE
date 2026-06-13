@@ -503,7 +503,26 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   }
 
   function openNew() {
-    setForm({...EMPTY_FORM, date: fmtDate(new Date())});
+    // Restaure un brouillon en attente s'il existe (auto-sauvegarde locale)
+    let initial = {...EMPTY_FORM, date: fmtDate(new Date())};
+    try {
+      const raw = localStorage.getItem("cloane_brouillon_commande");
+      if (raw) {
+        const draft = JSON.parse(raw);
+        const hasContent = draft && (draft.nom || draft.prenom || draft.tel || draft.marque || draft.modele);
+        if (hasContent && confirm(
+          "Un brouillon de commande non enregistré a été retrouvé. Le reprendre ?\n\n" +
+          (draft.nom ? "Client : " + draft.nom + " " + (draft.prenom||"") + "\n" : "") +
+          (draft.marque ? "Marque : " + draft.marque + "\n" : "") +
+          (draft.modele ? "Modèle : " + draft.modele : "")
+        )) {
+          initial = {...EMPTY_FORM, ...draft};
+        } else {
+          localStorage.removeItem("cloane_brouillon_commande");
+        }
+      }
+    } catch (e) { /* ignore */ }
+    setForm(initial);
     setEditId(null);
     setShowEdit(true);
   }
@@ -513,6 +532,17 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
     setEditId(row.id);
     setShowEdit(true);
   }
+
+  // Sauvegarde automatique du brouillon dans le navigateur à chaque modification
+  // (sécurité : si la fenêtre se ferme accidentellement, on retrouve la saisie)
+  useEffect(() => {
+    if (!showEdit || editId) return; // uniquement pour les NOUVELLES commandes
+    const hasContent = form.nom || form.prenom || form.tel || form.marque || form.modele || form.refInt || form.refFourn;
+    if (hasContent) {
+      try { localStorage.setItem("cloane_brouillon_commande", JSON.stringify(form)); }
+      catch (e) { /* quota / désactivé */ }
+    }
+  }, [form, showEdit, editId]);
 
   async function saveForm() {
     if (!form.nom?.trim()) {
@@ -549,6 +579,8 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
       try {
         const newRow = await db.insertOrder(draft);
         setData(d => [newRow, ...d]);
+        // Brouillon sauvegardé n'a plus de raison d'être
+        try { localStorage.removeItem("cloane_brouillon_commande"); } catch (e) { /* ignore */ }
         if (newRow.etat === "Client prévenu") {
           setTimeout(() => setTicketRow({
             ...newRow,
@@ -1378,7 +1410,16 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
 
       {/* ── EDIT MODAL ─────────────────────────────────────────────── */}
       {showEdit && (
-        <Modal onClose={()=>setShowEdit(false)} title={editId ? "Modifier la commande" : "Nouvelle commande"}>
+        <Modal onClose={()=>{
+          if (!editId) {
+            const hasContent = form.nom || form.prenom || form.tel || form.marque || form.modele;
+            if (hasContent && !confirm("Abandonner cette commande en cours de saisie ?\n(Le brouillon sera supprimé.)")) {
+              return;
+            }
+            try { localStorage.removeItem("cloane_brouillon_commande"); } catch (e) {}
+          }
+          setShowEdit(false);
+        }} title={editId ? "Modifier la commande" : "Nouvelle commande"} dismissible={false}>
           <div style={{padding:"22px 28px"}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <FormField label="Date création">
@@ -1509,7 +1550,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
 
       {/* ── TICKET CAISSE MODAL ─────────────────────────────────────── */}
       {ticketRow && (
-        <Modal onClose={()=>{saveTicket(); setTicketRow(null);}} title="Ticket caisse — Client prévenu" maxWidth={560}>
+        <Modal onClose={()=>{saveTicket(); setTicketRow(null);}} title="Ticket caisse — Client prévenu" maxWidth={560} dismissible={false}>
           <div style={{padding:"20px 24px"}}>
             <div style={{
               display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14,
@@ -1669,7 +1710,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
 
       {/* ── SETTINGS MODAL (manage brands / vendors) ─────────────────── */}
       {showSettings && (
-        <Modal onClose={()=>setShowSettings(false)} title="Gérer les listes" maxWidth={520}>
+        <Modal onClose={()=>setShowSettings(false)} title="Gérer les listes" maxWidth={520} dismissible={false}>
           <div style={{padding:"0 0 20px"}}>
             <div style={{display:"flex",borderBottom:"1px solid #EDE4D5",padding:"0 24px"}}>
               {[
@@ -1943,7 +1984,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
 
       {/* ── RUPTURE STOCK : modal pour prévenir le client ─────────────── */}
       {ruptureRow && (
-        <Modal onClose={()=>setRuptureRow(null)} title="Rupture de stock — prévenir le client" maxWidth={520}>
+        <Modal onClose={()=>setRuptureRow(null)} title="Rupture de stock — prévenir le client" maxWidth={520} dismissible={false}>
           <div style={{
             background:"#FCEAEA",border:"1px solid #F0C8C8",borderRadius:10,
             padding:"14px 16px",marginBottom:16,
@@ -2083,9 +2124,9 @@ function contactBtnInlineStyle(accent) {
 
 // ── Inline helper components ────────────────────────────────────────────────
 
-function Modal({children, onClose, title, maxWidth=640}) {
+function Modal({children, onClose, title, maxWidth=640, dismissible=true}) {
   return (
-    <div onClick={onClose} style={{
+    <div onClick={dismissible ? onClose : undefined} style={{
       position:"fixed",inset:0,zIndex:1000,
       background:"rgba(28,21,16,0.55)",backdropFilter:"blur(4px)",
       display:"flex",alignItems:"flex-start",justifyContent:"center",
