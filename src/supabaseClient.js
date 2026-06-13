@@ -186,3 +186,29 @@ export async function renameStatut(oldNom, newNom) {
   const { error } = await supabase.rpc("rename_statut", { old_nom: oldNom, new_nom: newNom });
   if (error) throw error;
 }
+
+// ── FOURNISSEURS (anciennement local state, désormais persisté en base) ──
+const FOURNISSEURS_TABLE = "fournisseurs";
+
+export async function fetchFournisseurs() {
+  const { data, error } = await supabase
+    .from(FOURNISSEURS_TABLE).select("*").order("nom");
+  if (error) throw error;
+  return data || [];
+}
+export async function insertFournisseur(nom, url = "", tel = "", email = "") {
+  const { data, error } = await supabase
+    .from(FOURNISSEURS_TABLE).insert({ nom, url, tel, email }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function updateFournisseur(id, patch) {
+  const { error } = await supabase
+    .from(FOURNISSEURS_TABLE).update(patch).eq("id", id);
+  if (error) throw error;
+}
+export async function deleteFournisseur(id) {
+  const { error } = await supabase
+    .from(FOURNISSEURS_TABLE).delete().eq("id", id);
+  if (error) throw error;
+}

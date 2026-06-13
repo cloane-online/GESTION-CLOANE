@@ -253,9 +253,21 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [brands, setBrands] = useState([...DEFAULT_BRANDS]);
+  // Liste unifiée des fournisseurs : tableau d'objets {id, nom, url, tel, email}
+  // Persistée dans Supabase (table 'fournisseurs'), modifiable par les managers.
+  // Remplace l'ancien duo brands[] + brandUrls{} qui était en local React state.
+  const [fournisseursAll, setFournisseursAll] = useState([]);
   const [vendeursAll, setVendeursAll] = useState([]); // [{id,nom,magasins:[]}]
   const [statutsAll, setStatutsAll] = useState([]); // [{id,nom,couleur,ordre}]
+
+  // Liste des noms de marques (pour les <select>) — dérivée de fournisseursAll
+  const brands = useMemo(() => fournisseursAll.map(f => f.nom), [fournisseursAll]);
+  // Accès rapide aux infos d'un fournisseur par son nom (compat ancien brandUrls)
+  const brandUrls = useMemo(() => {
+    const map = {};
+    for (const f of fournisseursAll) map[f.nom] = { url: f.url||"", tel: f.tel||"", email: f.email||"" };
+    return map;
+  }, [fournisseursAll]);
 
   // ETATS normalisés (compat avec l'ancien format {val,label,color,bg})
   const ETATS = useMemo(() => {
@@ -269,14 +281,6 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
       ordre: s.ordre,
     }));
   }, [statutsAll]);
-  // Infos B2B par fournisseur : URL site B2B, téléphone et e-mail du contact
-  const [brandUrls, setBrandUrls] = useState({
-    "CARHARTT":       { url: "https://b2b.carhartt-wip.com", tel: "", email: "" },
-    "TOMMY HILFIGER": { url: "https://b2b.tommy.com",        tel: "", email: "" },
-    "LACOSTE":        { url: "https://b2b.lacoste.com",      tel: "", email: "" },
-    "AIGLE":          { url: "https://pro.aigle.com",        tel: "", email: "" },
-    "REPLAY":         { url: "https://b2b.replay.it",        tel: "", email: "" },
-  });
   const [filters, setFilters] = useState({etat:"",marque:"",vendeur:""});
   const [search, setSearch] = useState("");
   const [sortCol, setSortCol] = useState("date");
@@ -295,7 +299,13 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   const [archiveCount, setArchiveCount] = useState(0);
   const [newBrandInput, setNewBrandInput] = useState("");
   const [newVendorInput, setNewVendorInput] = useState("");
+  // Recherche de fournisseur dans les paramètres
+  const [brandSearch, setBrandSearch] = useState("");
+  // Marque à mettre en surbrillance dans les paramètres après auto-ouverture
+  const [highlightBrand, setHighlightBrand] = useState(null);
   const [contactMenu, setContactMenu] = useState(null); // {row, x, y} popover contact client
+  // Timers de debounce pour la sauvegarde des champs fournisseur en base
+  const brandSaveTimers = useRef({});
   const [statusMenu, setStatusMenu] = useState(null);   // {row, x, y} popover changement de statut
   const [ruptureRow, setRuptureRow] = useState(null);   // modal "rupture stock — prévenir client"
 
@@ -376,6 +386,11 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
         const s = await db.fetchStatuts();
         setStatutsAll(s);
       } catch (e) { console.error("fetchStatuts", e); }
+      // Charger la liste des fournisseurs depuis Supabase
+      try {
+        const f = await db.fetchFournisseurs();
+        setFournisseursAll(f);
+      } catch (e) { console.error("fetchFournisseurs", e); }
     })();
   }, []);
 
@@ -653,21 +668,42 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
   }
 
   // ── Brand / Vendor management ──
-  function addBrand() {
-    const name = newBrandInput.trim().toUpperCase();
-    if (!name || brands.includes(name)) return;
-    setBrands(b => [...b, name].sort());
-    setNewBrandInput("");
+  // Ajoute un nouveau fournisseur en base
+  async function addBrand() {
+    const name = upperCaseFr(newBrandInput.trim());
+    if (!name) return;
+    if (fournisseursAll.some(f => f.nom === name)) {
+      alert(`La marque "${name}" existe déjà.`);
+      return;
+    }
+    try {
+      const created = await db.insertFournisseur(name);
+      setFournisseursAll(arr => [...arr, created].sort((a,b) => a.nom.localeCompare(b.nom)));
+      setNewBrandInput("");
+      setBrandSearch(name); // pour le voir tout de suite dans la liste filtrée
+      setHighlightBrand(name);
+      setTimeout(() => setHighlightBrand(null), 2500);
+    } catch (e) {
+      console.error(e);
+      alert("Impossible d'ajouter ce fournisseur. Vérifiez vos droits (managers uniquement).");
+    }
   }
-  function removeBrand(name) {
-    if (!confirm(`Supprimer la marque "${name}" de la liste ?`)) return;
-    setBrands(b => b.filter(x => x !== name));
-    setBrandUrls(u => { const n = {...u}; delete n[name]; return n; });
+  // Supprime un fournisseur de la base
+  async function removeBrand(name) {
+    if (!confirm(`Supprimer le fournisseur "${name}" de la liste ?`)) return;
+    const found = fournisseursAll.find(f => f.nom === name);
+    if (!found) return;
+    setFournisseursAll(arr => arr.filter(f => f.id !== found.id));
+    try { await db.deleteFournisseur(found.id); }
+    catch (e) {
+      console.error(e);
+      alert("Impossible de supprimer ce fournisseur. Vérifiez vos droits (managers uniquement).");
+      db.fetchFournisseurs().then(setFournisseursAll).catch(()=>{});
+    }
   }
-  // Ouvre le site B2B de la marque (bouton "Commander")
   // Bouton "Commander" : ouvre le site B2B si URL renseignée,
   // sinon ouvre un mail prérempli au fournisseur si email renseigné,
-  // sinon propose d'aller renseigner l'un ou l'autre.
+  // sinon ouvre directement les paramètres au bon endroit pour saisir l'info.
   function openOrderUrl(row) {
     // Supporte les 2 signatures : openOrderUrl(row) ou openOrderUrl(marqueString)
     const marque = typeof row === "string" ? row : row?.marque;
@@ -688,11 +724,12 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
       window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
       return;
     }
-    alert(
-      `Aucun lien B2B ni e-mail enregistrés pour « ${marque} ».\n` +
-      `Renseignez au moins l'un des deux dans ⚙ Paramètres → Fournisseurs.`
-    );
-    setShowSettings(true); setSettingsTab("brands");
+    // Aucune coordonnée : ouvre directement les paramètres au bon endroit
+    setShowSettings(true);
+    setSettingsTab("brands");
+    setBrandSearch(marque);
+    setHighlightBrand(marque);
+    setTimeout(() => setHighlightBrand(null), 4000);
   }
   // Construit le mail au fournisseur avec le détail de la commande
   function buildSupplierOrderMessage(row, marque, magasin) {
@@ -707,11 +744,22 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
     return lines.join("\n");
   }
   // Met à jour une info fournisseur (url, tel ou email)
+  // Met à jour un champ d'un fournisseur (url, tel ou email).
+  // Met à jour l'UI immédiatement puis sauvegarde en Supabase avec debounce.
   function setBrandField(name, field, value) {
-    setBrandUrls(u => ({
-      ...u,
-      [name]: { url:"", tel:"", email:"", ...(u[name]||{}), [field]: value }
-    }));
+    setFournisseursAll(arr => arr.map(f => f.nom === name ? {...f, [field]: value} : f));
+    const found = fournisseursAll.find(f => f.nom === name);
+    if (!found) return;
+    // Debounce 500ms pour éviter un appel à chaque touche
+    if (brandSaveTimers.current[found.id]) clearTimeout(brandSaveTimers.current[found.id]);
+    brandSaveTimers.current[found.id] = setTimeout(async () => {
+      try { await db.updateFournisseur(found.id, { [field]: value }); }
+      catch (e) {
+        console.error("updateFournisseur", e);
+        alert("Impossible de sauvegarder la modification du fournisseur. Vérifiez vos droits.");
+        db.fetchFournisseurs().then(setFournisseursAll).catch(()=>{});
+      }
+    }, 500);
   }
   // Contact client : WhatsApp / Mail / SMS avec message + tracker boolean
   function sendWhatsApp(row) {
@@ -1714,7 +1762,7 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
           <div style={{padding:"0 0 20px"}}>
             <div style={{display:"flex",borderBottom:"1px solid #EDE4D5",padding:"0 24px"}}>
               {[
-                {key:"brands",label:`Fournisseurs (${brands.length})`},
+                {key:"brands",label:`Fournisseurs (${fournisseursAll.length})`},
                 {key:"vendors",label:`Conseillers (${vendeursAll.length})`},
                 {key:"statuts",label:`Statuts (${statutsAll.length})`},
               ].map(t => (
@@ -1731,72 +1779,139 @@ export default function CommandesB2B({ session, profile, onSignOut, onBack }) {
             <div style={{padding:"18px 24px",maxHeight:380,overflowY:"auto"}}>
               {settingsTab === "brands" ? (
                 <>
+                  {/* Barre de recherche pour retrouver rapidement un fournisseur */}
+                  <div style={{position:"relative",marginBottom:12}}>
+                    <span style={{
+                      position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
+                      fontSize:14,color:"#A09080",pointerEvents:"none",
+                    }}>🔍</span>
+                    <input value={brandSearch} onChange={e=>setBrandSearch(e.target.value)}
+                      placeholder="Rechercher un fournisseur (nom, début du nom…)"
+                      style={{...inputStyle(),paddingLeft:36}}/>
+                    {brandSearch && (
+                      <button onClick={()=>setBrandSearch("")} title="Effacer" style={{
+                        position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
+                        background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:"#A09080",
+                      }}>×</button>
+                    )}
+                  </div>
+                  {/* Ajout d'un nouveau fournisseur */}
                   <div style={{display:"flex",gap:8,marginBottom:12}}>
                     <input value={newBrandInput} onChange={e=>setNewBrandInput(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&addBrand()}
                       placeholder="Nouveau fournisseur (sera mis en majuscules)"
-                      style={inputStyle()}/>
-                    <button onClick={addBrand} style={{
-                      background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
-                      padding:"0 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",
+                      style={inputStyle()} disabled={!isManager}/>
+                    <button onClick={addBrand} disabled={!isManager} style={{
+                      background: isManager ? "#1C1510" : "#AAA",
+                      color:"#E8DED0",border:"none",borderRadius:8,
+                      padding:"0 16px",fontSize:12,
+                      cursor: isManager ? "pointer" : "not-allowed",
+                      fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",
                     }}>+ Ajouter</button>
                   </div>
+                  {!isManager && (
+                    <div style={{
+                      background:"#FFF8EB",border:"1px solid #E8DCC0",borderRadius:8,
+                      padding:"8px 12px",fontSize:11,color:"#7A5A2A",marginBottom:12,
+                      fontFamily:"'DM Sans',sans-serif",
+                    }}>ℹ️ Seuls les managers peuvent ajouter, modifier ou supprimer un fournisseur.</div>
+                  )}
                   <div style={{fontSize:10,color:"#A09080",fontFamily:"'DM Sans',sans-serif",marginBottom:10,letterSpacing:"0.04em"}}>
                     URL B2B, téléphone et e-mail du contact commercial. L'URL est utilisée par le bouton 🛒 Commander.
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {brands.map(b => {
-                      const info = brandUrls[b] || {url:"",tel:"",email:""};
-                      const fieldStyle = {
-                        flex:1,padding:"6px 9px",fontSize:11,
-                        fontFamily:"'DM Sans',sans-serif",
-                        border:"1px solid #E0D8CE",borderRadius:7,
-                        background:"#FFF",color:"#1C1510",minWidth:0,
-                      };
+                  {/* Liste des fournisseurs (filtrée par la barre de recherche) */}
+                  {(() => {
+                    const term = brandSearch.trim().toUpperCase();
+                    const filteredBrands = term
+                      ? fournisseursAll.filter(f => f.nom.toUpperCase().includes(term))
+                      : fournisseursAll;
+                    if (term && filteredBrands.length === 0) {
                       return (
-                        <div key={b} style={{
-                          background:"#FAFAF8",border:"1px solid #EDE4D5",borderRadius:10,
-                          padding:"10px 12px",
+                        <div style={{
+                          background:"#FAFAF8",border:"1px dashed #EDE4D5",borderRadius:10,
+                          padding:"24px",textAlign:"center",
                         }}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
-                            <span style={{
-                              fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:700,
-                              color:"#4A2C1A",letterSpacing:"0.04em",
-                            }}>{b}</span>
-                            <div style={{display:"flex",gap:6}}>
-                              {info.url && (
-                                <button onClick={()=>openOrderUrl(b)} title="Tester le lien" style={{
-                                  background:"#E3F0FC",border:"1px solid #B0CDE6",borderRadius:6,
-                                  padding:"4px 8px",fontSize:11,cursor:"pointer",color:"#1B5E9B",
-                                }}>↗ Ouvrir</button>
-                              )}
-                              <button onClick={()=>removeBrand(b)} title="Supprimer" style={{
-                                background:"#FDEEEE",border:"none",borderRadius:"50%",
-                                width:24,height:24,cursor:"pointer",color:"#9B2020",fontSize:14,lineHeight:1,
-                              }}>×</button>
-                            </div>
+                          <div style={{fontSize:13,color:"#5A4030",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>
+                            Aucun fournisseur trouvé pour « <b>{brandSearch}</b> »
                           </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:6}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <span style={{fontSize:11,width:18,textAlign:"center"}}>🔗</span>
-                              <input value={info.url||""} onChange={e=>setBrandField(b,"url",e.target.value)}
-                                placeholder="URL B2B (ex : b2b.marque.com)" style={fieldStyle}/>
-                            </div>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <span style={{fontSize:11,width:18,textAlign:"center"}}>📞</span>
-                              <input value={info.tel||""} onChange={e=>setBrandField(b,"tel",e.target.value)}
-                                placeholder="Téléphone du contact commercial" style={fieldStyle}/>
-                            </div>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <span style={{fontSize:11,width:18,textAlign:"center"}}>✉️</span>
-                              <input type="email" value={info.email||""} onChange={e=>setBrandField(b,"email",e.target.value)}
-                                placeholder="E-mail du contact" style={fieldStyle}/>
-                            </div>
-                          </div>
+                          {isManager && (
+                            <button onClick={()=>{setNewBrandInput(brandSearch);addBrand();}} style={{
+                              background:"#1C1510",color:"#E8DED0",border:"none",borderRadius:8,
+                              padding:"7px 14px",fontSize:11,cursor:"pointer",marginTop:8,
+                              fontFamily:"'DM Sans',sans-serif",fontWeight:600,
+                            }}>+ Ajouter « {brandSearch.toUpperCase()} »</button>
+                          )}
                         </div>
                       );
-                    })}
-                  </div>
+                    }
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                        {filteredBrands.map(f => {
+                          const b = f.nom;
+                          const info = brandUrls[b] || {url:"",tel:"",email:""};
+                          const isHighlighted = highlightBrand === b;
+                          const fieldStyle = {
+                            flex:1,padding:"6px 9px",fontSize:11,
+                            fontFamily:"'DM Sans',sans-serif",
+                            border:"1px solid #E0D8CE",borderRadius:7,
+                            background:"#FFF",color:"#1C1510",minWidth:0,
+                          };
+                          return (
+                            <div key={f.id || b} style={{
+                              background: isHighlighted ? "#FFF8EB" : "#FAFAF8",
+                              border: isHighlighted ? "2px solid #C8A96E" : "1px solid #EDE4D5",
+                              borderRadius:10,
+                              padding:"10px 12px",
+                              transition:"border-color 0.3s, background 0.3s",
+                            }}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+                                <span style={{
+                                  fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:700,
+                                  color:"#4A2C1A",letterSpacing:"0.04em",
+                                }}>{b}{isHighlighted && (
+                                  <span style={{fontSize:10,color:"#7A5A2A",fontWeight:500,marginLeft:8}}>← à compléter</span>
+                                )}</span>
+                                <div style={{display:"flex",gap:6}}>
+                                  {info.url && (
+                                    <button onClick={()=>openOrderUrl(b)} title="Tester le lien" style={{
+                                      background:"#E3F0FC",border:"1px solid #B0CDE6",borderRadius:6,
+                                      padding:"4px 8px",fontSize:11,cursor:"pointer",color:"#1B5E9B",
+                                    }}>↗ Ouvrir</button>
+                                  )}
+                                  {isManager && (
+                                    <button onClick={()=>removeBrand(b)} title="Supprimer" style={{
+                                      background:"#FDEEEE",border:"none",borderRadius:"50%",
+                                      width:24,height:24,cursor:"pointer",color:"#9B2020",fontSize:14,lineHeight:1,
+                                    }}>×</button>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontSize:11,width:18,textAlign:"center"}}>🔗</span>
+                                  <input value={info.url||""} onChange={e=>setBrandField(b,"url",e.target.value)}
+                                    placeholder="URL B2B (ex : b2b.marque.com)" style={fieldStyle}
+                                    disabled={!isManager}/>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontSize:11,width:18,textAlign:"center"}}>📞</span>
+                                  <input value={info.tel||""} onChange={e=>setBrandField(b,"tel",e.target.value)}
+                                    placeholder="Téléphone du contact commercial" style={fieldStyle}
+                                    disabled={!isManager}/>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontSize:11,width:18,textAlign:"center"}}>✉️</span>
+                                  <input type="email" value={info.email||""} onChange={e=>setBrandField(b,"email",e.target.value)}
+                                    placeholder="E-mail du contact" style={fieldStyle}
+                                    disabled={!isManager}/>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </>
               ) : settingsTab === "vendors" ? (
                 <>
