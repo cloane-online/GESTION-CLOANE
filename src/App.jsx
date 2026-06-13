@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CommandesB2B from "./CommandesB2B.jsx";
 import LoginScreen from "./LoginScreen.jsx";
 import * as db from "./supabaseClient";
@@ -8,19 +8,30 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState("");
+  // Empêche de re-charger le profil quand Supabase rafraîchit juste le token
+  // (sinon CommandesB2B est démonté et la modale de saisie disparaît)
+  const loadedUserIdRef = useRef(null);
 
   useEffect(() => {
-    // Charger session existante au démarrage
     db.getSession().then(s => {
       setSession(s);
       if (s) loadProfile(s.user.id);
       else setLoading(false);
     });
-    // Écouter les changements (login/logout)
     const { data: { subscription } } = db.onAuthChange((s) => {
       setSession(s);
-      if (s) loadProfile(s.user.id);
-      else { setProfile(null); setLoading(false); }
+      if (!s) {
+        // déconnexion : on remet à zéro
+        loadedUserIdRef.current = null;
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      // Si c'est le même utilisateur (refresh token, focus de la page…),
+      // on ne touche à RIEN — on ne veut pas démonter l'app et perdre la saisie.
+      if (loadedUserIdRef.current === s.user.id) return;
+      // Sinon (vrai login d'un autre utilisateur), on charge le profil
+      loadProfile(s.user.id);
     });
     return () => subscription?.unsubscribe?.();
   }, []);
@@ -30,6 +41,7 @@ export default function App() {
     try {
       const p = await db.fetchProfile(userId);
       setProfile(p);
+      loadedUserIdRef.current = userId;
     } catch (e) {
       console.error(e);
       setProfileError("Profil utilisateur introuvable. Contactez un administrateur.");
